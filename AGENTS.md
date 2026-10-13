@@ -25,7 +25,7 @@ app/
     ├── ticker/route.ts     # 24hr stats for MarketStats
     ├── sentiment/route.ts  # Fear & Greed + funding rate + open interest
     ├── comparison/route.ts # Multi-symbol ticker + sparklines
-    ├── news/route.ts       # CoinDesk RSS with keyword sentiment
+    ├── news/route.ts       # Multi-source RSS (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) + sentiment
     └── correlation/route.ts# BTC/ETH 30d rolling correlation
 components/
 ├── Panel.tsx               # Wrapper: drag grip + height/span. Use for side panels

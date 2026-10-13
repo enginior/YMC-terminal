@@ -105,7 +105,7 @@ AI_fintech/
 | Bybit WebSocket | Bybit | Trades (price aggregate) | `wss://stream.bybit.com/v5/public/spot` |
 | Binance REST API | Binance | Klines (fill/live), 24hr ticker, funding rate, open interest | `api.binance.com/api/v3/` + `fapi.binance.com/fapi/v1/` |
 | Fear & Greed Index | alternative.me | Market sentiment gauge | `api.alternative.me/fng/` |
-| CoinDesk RSS | CoinDesk | BTC news headlines | `coindesk.com/arc/outboundfeeds/rss/` |
+| RSS news (6 feeds) | CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC | Crypto + macro headlines | per-feed URLs in `app/api/news/route.ts` |
 | static-klines | GitHub Pages | Full historical OHLCV (2010–present) | `finom.github.io/static-klines/api/klines/` |
 
 No API keys required — all endpoints are free and public.
