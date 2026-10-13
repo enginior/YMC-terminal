@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* Tailwind v4 is CSS-first: theme values live here, not in tailwind.config.js.
+   Only the monospace stack is declared — every other colour comes from the
+   ThemeContext at runtime via inline styles. */
+@theme {
+  --font-mono: "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
+}
+
+/*
+ * UI density knobs. Set --ui-scale to 1 to opt out.
+ *
+ * `transform: scale()` rather than `zoom`: Chromium here accepts zoom but does
+ * not paint it, which left a silent ~4.8% underfill on the right edge.
+ * transform always paints, so the layout is laid out at 100%/scale and then
+ * scaled from the top-left, landing exactly on the viewport.
+ *
+ * The width/height divisors are what cancel the scale — without them the layer
+ * would overflow instead.
+ */
+:root {
+  --ui-scale: 1.05;
+}
+
+.app-scale {
+  transform: scale(var(--ui-scale));
+  transform-origin: top left;
+  width: calc(100% / var(--ui-scale));
+  height: calc(100% / var(--ui-scale));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 2px;
+}
