@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useTheme } from "@/context/ThemeContext";
 import { CHART_LABELS, resolvePrefix } from "@/lib/symbols";
 
@@ -100,13 +101,23 @@ export default function CommandBar({
           ))}
         </div>
       )}
-      <button
-        onClick={onOpenSettings}
-        className="text-sm px-2.5 py-1 rounded border hover:opacity-70 ml-auto"
-        style={{ borderColor: theme.border, color: theme.dim }}
-      >
-        Settings
-      </button>
+      <div className="flex items-center gap-1 ml-auto">
+        <Link
+          href="/about"
+          className="text-[11px] px-2 py-1 rounded hover:opacity-70"
+          style={{ color: theme.dim }}
+          title="About this terminal"
+        >
+          About
+        </Link>
+        <button
+          onClick={onOpenSettings}
+          className="text-sm px-2.5 py-1 rounded border hover:opacity-70"
+          style={{ borderColor: theme.border, color: theme.dim }}
+        >
+          Settings
+        </button>
+      </div>
       <div className="text-sm flex items-center gap-1.5" style={{ color: theme.dim }}>
         <span style={{ color: theme.green }}>●</span> LIVE | {time}
       </div>
