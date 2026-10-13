@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useTheme } from "@/context/ThemeContext";
+import { REPO_URL } from "@/lib/links";
 import { CHART_LABELS, resolvePrefix } from "@/lib/symbols";
 
 interface CommandBarProps {
@@ -102,6 +103,16 @@ export default function CommandBar({
         </div>
       )}
       <div className="flex items-center gap-1 ml-auto">
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] px-2 py-1 rounded hover:opacity-70"
+          style={{ color: theme.dim }}
+          title="View source on GitHub"
+        >
+          GitHub
+        </a>
         <Link
           href="/about"
           className="text-[11px] px-2 py-1 rounded hover:opacity-70"
