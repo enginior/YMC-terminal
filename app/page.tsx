@@ -12,6 +12,7 @@ import AlertsPanel from "@/components/AlertsPanel";
 import AlertNotification from "@/components/AlertNotification";
 import ExchangePanel from "@/components/ExchangePanel";
 import ComparisonPanel from "@/components/ComparisonPanel";
+import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
 import CorrelationPanel from "@/components/CorrelationPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
 import MarketSentimentPanel from "@/components/MarketSentimentPanel";
@@ -299,6 +300,10 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
+            <EconomicCalendarPanel />
+          </div>
+
+          <div style={{ background: theme.panel, height: 320 }}>
             <ComparisonPanel />
           </div>
 
@@ -350,6 +355,10 @@ export default function Home() {
         >
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Watchlist selected={selectedSymbol} onSelect={setSelectedSymbol} />
+          </div>
+          <div className="h-px shrink-0" style={{ background: theme.border }} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <EconomicCalendarPanel />
           </div>
           <div className="h-px shrink-0" style={{ background: theme.border }} />
           <div className="flex-1 min-h-0 overflow-hidden">
