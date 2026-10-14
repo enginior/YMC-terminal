@@ -115,7 +115,7 @@ export default function AboutPage() {
             className="flex flex-wrap items-center gap-3 pt-2 text-sm"
             style={{ color: theme.dim }}
           >
-            <span>YMC Terminal is open source under the MIT license.</span>
+            <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <a
               href={REPO_URL}
               target="_blank"

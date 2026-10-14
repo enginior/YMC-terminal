@@ -150,3 +150,9 @@ State is kept in `localStorage` under these keys:
   Binance REST.
 - `1m`/`5m` have no static archive, so history is Binance-only (~2–14 days).
 - The RSI/Stoch RSI panes are pinned to a 0–100 scale; MACD autoscales.
+
+## License
+
+Released under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-or-later).
+You are free to use, study, share and modify the software, provided derivative
+works are distributed under the same license.

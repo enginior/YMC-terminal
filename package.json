@@ -2,6 +2,7 @@
   "name": "btc-terminal",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "next dev -p 3030",
     "build": "next build",
