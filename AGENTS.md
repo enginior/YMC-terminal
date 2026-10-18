@@ -1,7 +1,7 @@
-# AGENTS.md — BTC Terminal
+# AGENTS.md — YMC Terminal
 
 ## Overview
-Bloomberg Terminal-style Next.js app for BTC/USDT trading data. Real-time dashboard with multi-panel layout, custom theming, drag-and-drop panels, technical indicators, and alerts.
+Bloomberg Terminal-style Next.js workstation for BTC/USDT and perpetual crypto derivative pairs. Real-time dashboard with multi-panel layout, exchange aggregation, custom theming, drag-and-drop panels, technical indicators, and price alerts.
 
 ## Tech Stack
 - Next.js 16 (App Router, Turbopack) + React 19 + TypeScript
@@ -20,12 +20,14 @@ app/
 ├── layout.tsx              # Root layout, ThemeProvider wrapper
 ├── page.tsx                # Grid layout, panel order (persisted), orchestration
 ├── globals.css             # Base styles
+├── about/page.tsx          # About page & documentation
 └── api/
-    ├── klines/route.ts     # OHLCV. static-klines history + Binance gap-fill + live tick
+    ├── klines/route.ts     # OHLCV: static-klines history + Binance gap-fill + live tick
     ├── ticker/route.ts     # 24hr stats for MarketStats
     ├── sentiment/route.ts  # Fear & Greed + funding rate + open interest
     ├── comparison/route.ts # Multi-symbol ticker + sparklines
     ├── news/route.ts       # Multi-source RSS (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) + sentiment
+    ├── calendar/route.ts   # Keyless high-impact macro economic calendar
     └── correlation/route.ts# BTC/ETH 30d rolling correlation
 components/
 ├── Panel.tsx               # Wrapper: drag grip + height/span. Use for side panels
@@ -39,6 +41,7 @@ components/
 ├── AlertNotification.tsx   # Toast for triggered alerts
 ├── ExchangePanel.tsx       # Per-exchange prices, aggregation, spread
 ├── ComparisonPanel.tsx     # Multi-symbol sparklines
+├── EconomicCalendarPanel.tsx # High-impact macro calendar events
 ├── MarketSentimentPanel.tsx# F&G gauge, funding rates, OI
 ├── CorrelationPanel.tsx    # BTC/ETH correlation bars
 ├── NewsFeedPanel.tsx       # News with bull/bear filter
@@ -54,7 +57,8 @@ lib/
 ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
-└── drawings.ts             # Level / trend / box drawings + live draft, series primitive
+├── drawings.ts             # Level / trend / box drawings + live draft, series primitive
+└── links.ts                # Canonical repository links
 ```
 
 ## Notable Constraints

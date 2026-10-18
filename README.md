@@ -1,14 +1,16 @@
-# BTC Terminal
+# YMC Terminal
 
-A simplified **Bloomberg Terminal–style** dashboard for BTC/USDT and a handful of
-other crypto pairs. It streams live prices from four exchanges, renders a
-TradingView-grade candlestick chart with technical indicators and drawing tools,
-and surrounds it with the panels a trader actually glances at: order book, trade
-tape, 24h stats, exchange comparison, sentiment, correlation, news and alerts.
+A **Bloomberg Terminal–style** trading workstation curated for BTC/USDT and
+perpetual crypto derivative pairs. It streams live prices from multiple exchanges,
+renders a TradingView-grade candlestick chart with technical indicators and
+drawing tools, and surrounds it with the telemetry a trader actively glances at:
+order book, trade tape, 24h stats, exchange comparison, sentiment, economic calendar,
+correlation, multi-source news, and price alerts.
 
-Originally a demo of what a dense, real-time trading UI looks like on the modern
-React/Next.js stack. No API keys, no paid feeds — every data source is free and
-public.
+Live in production on Vercel: [github.com/enginior/YMC-terminal](https://github.com/enginior/YMC-terminal)
+
+Originally built to demonstrate what a dense, real-time trading UI looks like on the modern
+React/Next.js stack. No API keys, no paid feeds — every data source is free and public.
 
 > Not financial advice. This is a data-display tool, not a trading system —
 > there is no order entry and no wallet integration.
@@ -48,9 +50,10 @@ public.
 - **Exchange comparison** — per-venue price, aggregated mid, and spread.
 - **Multi-symbol comparison** — sparklines across the tracked pairs.
 - **Market sentiment** — Fear & Greed gauge, funding rate and open interest.
+- **Economic Calendar** — high-impact macroeconomic events (Fed, CPI, NFP, interest rate decisions) with previous, forecast, and actual prints.
 - **Correlation** — BTC/ETH 30-day rolling correlation (BTC/SPX, DXY and Gold are
   placeholders pending a TradFi feed).
-- **News** — CoinDesk headlines with a keyword-based bull/bear filter.
+- **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter.
 
 ### Alerts & theming
 - **Price alerts** — above/below thresholds with a sound notification (on/off
@@ -119,9 +122,9 @@ hooks/       useMultiExchangeData (sockets + candles), useAlerts
 lib/         indicators, symbol mapping, chart series primitives, types
 ```
 
-See [`PROJECT.md`](./PROJECT.md) for a fuller architecture breakdown and roadmap,
-and [`AGENTS.md`](./AGENTS.md) for the conventions and hard-won constraints worth
-knowing before making changes.
+See [`PROJECT.md`](./PROJECT.md) for architecture and roadmap,
+[`UPDATE_PHASE.md`](./UPDATE_PHASE.md) for the upcoming features and UI/UX blueprint,
+and [`AGENTS.md`](./AGENTS.md) for conventions and hard-won constraints.
 
 ## Data sources
 
@@ -134,7 +137,8 @@ All free and public — **no API keys required**.
 | Binance REST | Klines (fill + live), 24h ticker, funding rate, open interest |
 | static-klines (GitHub Pages) | Full historical OHLCV |
 | alternative.me | Fear & Greed Index |
-| CoinDesk RSS | News headlines |
+| biquote.io | High-impact global economic calendar |
+| Multi-Source RSS (CoinDesk, CT, Block, Decrypt, etc.) | News headlines |
 
 ## Persistence
 

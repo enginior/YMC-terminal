@@ -9,6 +9,7 @@ import { CHART_LABELS, resolvePrefix } from "@/lib/symbols";
 interface CommandBarProps {
   onCommand: (cmd: string) => void;
   onOpenSettings: () => void;
+  onOpenShortcuts?: () => void;
   onSelectSymbol?: (symbol: string) => void;
   selectedSymbol?: string;
 }
@@ -16,6 +17,7 @@ interface CommandBarProps {
 export default function CommandBar({
   onCommand,
   onOpenSettings,
+  onOpenShortcuts,
   onSelectSymbol,
   selectedSymbol,
 }: CommandBarProps) {
@@ -121,6 +123,16 @@ export default function CommandBar({
         >
           About
         </Link>
+        {onOpenShortcuts && (
+          <button
+            onClick={onOpenShortcuts}
+            className="text-xs px-2 py-1 rounded border hover:opacity-70 font-mono font-bold"
+            style={{ borderColor: theme.border, color: theme.yellow }}
+            title="Keyboard Shortcuts (?)"
+          >
+            ?
+          </button>
+        )}
         <button
           onClick={onOpenSettings}
           className="text-sm px-2.5 py-1 rounded border hover:opacity-70"

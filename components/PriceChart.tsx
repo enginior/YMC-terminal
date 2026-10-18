@@ -840,6 +840,25 @@ export default function PriceChart({
       if ((e.key === "Delete" || e.key === "Backspace") && !typing && selectedRef.current) {
         e.preventDefault();
         removeDrawingById(selectedRef.current);
+        return;
+      }
+
+      if (!typing) {
+        if (e.key === "v" || e.key === "V") {
+          e.preventDefault();
+          setShowVolume((prev) => !prev);
+          return;
+        }
+        if (e.key === "d" || e.key === "D") {
+          e.preventDefault();
+          setShowDayLines((prev) => !prev);
+          return;
+        }
+        if (e.key === "m" || e.key === "M") {
+          e.preventDefault();
+          setMagnetOn((prev) => !prev);
+          return;
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -863,6 +882,48 @@ export default function PriceChart({
     drawingsPrimRef.current?.setInteraction(null, null);
     setDrawingsBySymbol((prev) => ({ ...prev, [symbol]: [] }));
   };
+
+  const exportPng = useCallback(() => {
+    if (!chartRef.current) return;
+    try {
+      const canvas = chartRef.current.takeScreenshot();
+      const url = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      const cleanSym = symbol.replace(/[\/\s]/g, "");
+      link.href = url;
+      link.download = `${cleanSym}_${timeframe}_chart.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Failed to capture chart screenshot:", err);
+    }
+  }, [symbol, timeframe]);
+
+  const exportCsv = useCallback(() => {
+    if (!candles || candles.length === 0) return;
+    try {
+      const headers = "Timestamp,DateTimeUTC,Open,High,Low,Close,Volume\n";
+      const rows = candles
+        .map((c) => {
+          const iso = new Date(c.time * 1000).toISOString();
+          return `${c.time},${iso},${c.open},${c.high},${c.low},${c.close},${c.volume}`;
+        })
+        .join("\n");
+      const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const cleanSym = symbol.replace(/[\/\s]/g, "");
+      link.href = url;
+      link.download = `${cleanSym}_${timeframe}_ohlcv.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to export CSV:", err);
+    }
+  }, [candles, symbol, timeframe]);
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -1052,6 +1113,27 @@ export default function PriceChart({
             {candleError ? "Candle feed unavailable for this symbol" : "Loading candles…"}
           </span>
         )}
+
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={exportPng}
+            disabled={candles.length === 0}
+            className="text-[10px] px-1.5 py-0.5 rounded border hover:opacity-70 disabled:opacity-30"
+            style={{ borderColor: theme.border, color: theme.dim }}
+            title="Export chart snapshot as PNG"
+          >
+            📷 Snap
+          </button>
+          <button
+            onClick={exportCsv}
+            disabled={candles.length === 0}
+            className="text-[10px] px-1.5 py-0.5 rounded border hover:opacity-70 disabled:opacity-30"
+            style={{ borderColor: theme.border, color: theme.dim }}
+            title="Download OHLCV candle data as CSV"
+          >
+            📥 CSV
+          </button>
+        </div>
       </div>
 
       <div className="relative flex-1 w-full min-h-0 overflow-hidden">

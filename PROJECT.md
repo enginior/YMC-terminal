@@ -1,9 +1,9 @@
-# BTC Terminal — Project Plan
+# YMC Terminal — Project Plan
 
 ## Overview
-A simplified Bloomberg Terminal-style dashboard for BTC/USDT and a handful of
-other crypto pairs. Real-time multi-panel layout, exchange aggregation, custom
-theming, drag-and-drop panels, technical indicators, and alerts.
+A Bloomberg Terminal-style workstation curated for BTC/USDT and perpetual crypto
+derivative pairs. Real-time multi-panel layout, exchange aggregation, custom
+theming, drag-and-drop panels, technical indicators, and price alerts.
 
 ## Tech Stack
 - **Framework:** Next.js 16 (App Router, Turbopack) + React 19 + TypeScript
@@ -12,23 +12,26 @@ theming, drag-and-drop panels, technical indicators, and alerts.
 - **Charts:** lightweight-charts 5.2.1 (TradingView) — v5 series API (`addSeries`) + native sub-panes (`addPane`)
 - **State:** React Context (`ThemeContext`), custom hooks (`useMultiExchangeData`, `useAlerts`)
 - **Data:** Binance/Coinbase/OKX/Bybit WebSocket + Binance REST + static-klines +
-  alternative.me (Fear & Greed) + CoinDesk RSS
+  alternative.me (Fear & Greed) + biquote.io (Economic Calendar) + Multi-source RSS
+- **Deployment:** Vercel (Production)
 
 ## Architecture
 
 ```
-AI_fintech/
+ymc-terminal/
 ├── app/
 │   ├── layout.tsx              # Root layout, ThemeProvider wrapper
 │   ├── page.tsx                # Grid layout, panel order (persisted), orchestration
 │   ├── globals.css             # Base styles
 │   ├── icon.svg                # Favicon
+│   ├── about/page.tsx          # About page & documentation
 │   └── api/
 │       ├── klines/route.ts     # OHLCV: static-klines history + Binance gap-fill + live tick
 │       ├── ticker/route.ts     # 24hr stats for MarketStats
 │       ├── sentiment/route.ts  # Fear & Greed + funding rate + open interest
 │       ├── comparison/route.ts # Multi-symbol ticker + sparklines
-│       ├── news/route.ts       # CoinDesk RSS with keyword sentiment
+│       ├── news/route.ts       # Multi-source RSS with keyword sentiment
+│       ├── calendar/route.ts   # Keyless high-impact macro economic calendar
 │       └── correlation/route.ts# BTC/ETH 30d rolling correlation
 ├── components/
 │   ├── Panel.tsx               # Wrapper: drag grip + height/span
@@ -42,6 +45,7 @@ AI_fintech/
 │   ├── AlertNotification.tsx   # Toast for triggered alerts
 │   ├── ExchangePanel.tsx       # Per-exchange prices, aggregation, spread
 │   ├── ComparisonPanel.tsx     # Multi-symbol sparklines
+│   ├── EconomicCalendarPanel.tsx # High-impact macro economic calendar
 │   ├── MarketSentimentPanel.tsx# F&G gauge, funding rates, OI
 │   ├── CorrelationPanel.tsx    # BTC/ETH correlation bars
 │   ├── NewsFeedPanel.tsx       # News with bull/bear filter
@@ -57,7 +61,8 @@ AI_fintech/
 │   ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
 │   ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 │   ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
-│   └── drawings.ts             # Level / trend / box drawings + live draft, series primitive
+│   ├── drawings.ts             # Level / trend / box drawings + live draft, series primitive
+│   └── links.ts                # Canonical repository links
 └── package.json
 ```
 
@@ -151,9 +156,30 @@ useAlerts    → price monitoring → AlertNotification (toast)
 - [x] Performance optimization — socket ticks throttled to 1Hz, panels memoized
 - [x] Favicon (`app/icon.svg`)
 - [x] Chart viewport refit + container resize handling on symbol/timeframe change
+- [x] High-impact economic calendar panel (`components/EconomicCalendarPanel.tsx`)
+
+### Phase 6: Update Phase (Perpetuals & UI/UX Evolution) 🚀
+> Full blueprint and specifications documented in [`UPDATE_PHASE.md`](./UPDATE_PHASE.md).
+
+- **Perpetual Derivatives Deep-Dive:**
+  - Dynamic symbol funding rate & open interest (active pair reactive)
+  - 8-hour funding settlement countdown timer & annualized APR display
+  - Real-time perpetual liquidation bursts tape (`wss://fstream.binance.com/ws/!forceOrder@arr`)
+  - Global Long/Short account ratio widget
+  - Mark Price vs. Spot Price basis spread indicator
+- **Bloomberg UI/UX & Information Density:**
+  - Keyboard hotkeys (`?` cheat sheet modal, `1`–`6` symbol select, `[`/`]` timeframes, `v`/`d`/`m` toggles)
+  - Command bar action parser (`BTC 15M`, `ALERT 75K`, `THEME MATRIX`)
+  - Panel maximize / solo focus mode (`⤢` button / `f` key)
+  - Chart percentage & delta measurement tool (Ruler)
+  - Chart image snapshot (PNG) and candle data export (CSV)
+- **Architecture & Streaming Performance:**
+  - Decouple high-frequency WebSocket ticks from root `page.tsx` state to avoid full-tree reconciliation
+  - Autoplay audio policy status & test sound button in Settings/Alerts
+  - Watchlist filtering & top-volume perpetual pairs expansion
 
 ## Recommendations / Potential Updates
-Deferred rather than abandoned. Ordered roughly by value per unit of effort.
+Deferred rather than abandoned. Ordered roughly by value per unit of effort. See [`UPDATE_PHASE.md`](./UPDATE_PHASE.md) for full breakdown.
 
 ### High value, low effort
 - **Keyboard shortcuts.** `/` and `Esc` already work. Next: `1`–`6` to switch

@@ -16,11 +16,14 @@ import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
 import CorrelationPanel from "@/components/CorrelationPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
 import MarketSentimentPanel from "@/components/MarketSentimentPanel";
+import HotkeysModal from "@/components/HotkeysModal";
 import Panel from "@/components/Panel";
 import { useTheme } from "@/context/ThemeContext";
 import { useMultiExchangeData } from "@/hooks/useMultiExchangeData";
 import { useAlerts } from "@/hooks/useAlerts";
-import { toBinanceSymbol, resolvePrefix } from "@/lib/symbols";
+import { toBinanceSymbol, resolvePrefix, UNIVERSE } from "@/lib/symbols";
+
+const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 
 const DEFAULT_ORDER = [
   "orderbook",
@@ -62,11 +65,67 @@ export default function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
   const [timeframe, setTimeframe] = useState("1h");
   const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [direction, setDirection] = useState<"up" | "down">("up");
   const [price, setPrice] = useState(0);
   const [ticker, setTicker] = useState<TickerStats | null>(null);
   const [panelOrder, setPanelOrder] = useState<PanelId[]>([...DEFAULT_ORDER]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  // Global Bloomberg-style keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (isInput) return;
+
+      if (e.key === "?" || e.key === "h" || e.key === "H") {
+        e.preventDefault();
+        setShowShortcuts((prev) => !prev);
+        return;
+      }
+
+      // 1-6 switches pair
+      const num = parseInt(e.key, 10);
+      if (!isNaN(num) && num >= 1 && num <= UNIVERSE.length) {
+        e.preventDefault();
+        setSelectedSymbol(UNIVERSE[num - 1].label);
+        return;
+      }
+
+      // [ and ] cycles timeframe
+      if (e.key === "[") {
+        e.preventDefault();
+        setTimeframe((current) => {
+          const idx = TIMEFRAMES.indexOf(current as any);
+          return idx > 0 ? TIMEFRAMES[idx - 1] : TIMEFRAMES[0];
+        });
+        return;
+      }
+
+      if (e.key === "]") {
+        e.preventDefault();
+        setTimeframe((current) => {
+          const idx = TIMEFRAMES.indexOf(current as any);
+          return idx >= 0 && idx < TIMEFRAMES.length - 1 ? TIMEFRAMES[idx + 1] : TIMEFRAMES[TIMEFRAMES.length - 1];
+        });
+        return;
+      }
+
+      if (e.key === "Escape") {
+        setShowShortcuts(false);
+        setShowSettings(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const orderHydrated = useRef(false);
 
@@ -196,7 +255,7 @@ export default function Home() {
         );
         break;
       case "sentiment":
-        body = <MarketSentimentPanel />;
+        body = <MarketSentimentPanel symbol={selectedSymbol} />;
         break;
       case "exchange":
         body = (
@@ -252,6 +311,7 @@ export default function Home() {
           onSelectSymbol={setSelectedSymbol}
           selectedSymbol={selectedSymbol}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenShortcuts={() => setShowShortcuts(true)}
         />
 
         <div className="flex flex-col gap-px p-px" style={{ background: theme.border }}>
@@ -288,7 +348,7 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 260 }}>
-            <MarketSentimentPanel />
+            <MarketSentimentPanel symbol={selectedSymbol} />
           </div>
 
           <div style={{ background: theme.panel, height: 340 }}>
@@ -330,6 +390,7 @@ export default function Home() {
         </div>
 
         {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+        {showShortcuts && <HotkeysModal onClose={() => setShowShortcuts(false)} />}
         {showNotification && <AlertNotification alert={showNotification} onDismiss={dismissNotification} />}
       </div>
     );
@@ -342,6 +403,7 @@ export default function Home() {
         onSelectSymbol={setSelectedSymbol}
         selectedSymbol={selectedSymbol}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenShortcuts={() => setShowShortcuts(true)}
       />
 
       <div
@@ -394,6 +456,7 @@ export default function Home() {
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showShortcuts && <HotkeysModal onClose={() => setShowShortcuts(false)} />}
       {showNotification && <AlertNotification alert={showNotification} onDismiss={dismissNotification} />}
     </div>
   );
