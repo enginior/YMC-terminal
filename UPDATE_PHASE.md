@@ -20,14 +20,19 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 | **Perpetuals** | Dynamic Symbol Funding & Open Interest | High | Low | **P0** | ✅ Completed (`9a66b15`) |
 | **UI/UX** | Keyboard Hotkeys & Cheat Sheet Modal (`?`, `1`-`6`, `[`, `]`) | High | Low | **P0** | ✅ Completed (`9a66b15`) |
 | **Charting** | Chart PNG Snapshot & OHLCV CSV Export | Medium | Low | **P0** | ✅ Completed (`9a66b15`) |
-| **Perpetuals** | Next Funding Countdown & Annualized APR | High | Medium | **P1** | ✅ Ready for Audit |
-| **UI/UX** | Bloomberg Command Bar Action Syntax (`BTC 15M`, `THEME`, etc.) | High | Medium | **P1** | ✅ Ready for Audit |
-| **Perpetuals** | Live Perpetual Liquidation Feed (`!forceOrder@arr`) | High | Medium | **P1** | ✅ Ready for Audit |
-| **Charting** | Price & Percentage Delta Measurement Tool (Ruler) | High | Medium | **P1** | ✅ Ready for Audit |
-| **UI/UX** | Panel Maximize / Fullscreen Focus Mode (`f` / `⤢`) | High | Medium | **P1** | ✅ Ready for Audit |
-| **Derivatives**| Global Long/Short Account Ratio Widget | Medium | Low | **P2** | Planned |
-| **Watchlist** | Expand Perp Universe + Sort (Change %, Volume) | Medium | Medium | **P2** | Planned |
-| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P2** | Planned |
+| **Perpetuals** | Next Funding Countdown & Annualized APR | High | Medium | **P1** | ✅ Completed (`cfc0fd1`) |
+| **UI/UX** | Bloomberg Command Bar Action Syntax (`BTC 15M`, `THEME`, etc.) | High | Medium | **P1** | ✅ Completed (`cfc0fd1`) |
+| **Perpetuals** | Live Perpetual Liquidation Feed (`!forceOrder@arr`) | High | Medium | **P1** | ✅ Completed (`cfc0fd1`) |
+| **Charting** | Price & Percentage Delta Measurement Tool (Ruler) | High | Medium | **P1** | ✅ Completed (`cfc0fd1`) |
+| **UI/UX** | Panel Maximize / Fullscreen Focus Mode (`f` / `⤢`) | High | Medium | **P1** | ✅ Completed (`cfc0fd1`) |
+| **Derivatives**| Global Long/Short Account Ratio Widget | Medium | Low | **P2** | ✅ Completed |
+| **Watchlist** | Expand Universe (12 pairs: Cryptos + XAU, XAG, OIL) + Sort | Medium | Medium | **P2** | ✅ Completed |
+| **Asset Logos** | Vector Coin & Metallic Bullion / Commodity Badges | Medium | Low | **P2** | ✅ Completed |
+| **Derivatives**| Basis Spread (Mark vs. Spot Spread) in MarketStats | Medium | Low | **P2** | ✅ Completed |
+| **Charting** | Broker-style Broken Day Lines (between candles) | Medium | Low | **P2** | ✅ Completed |
+| **Charting** | 24H Session High / Low Price Watermark Lines (`H/L`) | Medium | Low | **P2** | ✅ Completed |
+| **UI/UX** | Reset Default Bloomberg Layout in Settings | Low | Low | **P2** | ✅ Completed |
+| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P3** | Planned |
 | **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P3** | Planned |
 
 ---

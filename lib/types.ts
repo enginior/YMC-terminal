@@ -38,4 +38,5 @@ export interface WatchlistItem {
   change: number;
   changePercent: number;
   volume: string;
+  rawVolume?: number;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Candle, Trade, OrderBookEntry } from "@/lib/types";
+import { isFuturesSymbol } from "@/lib/symbols";
 
 interface ExchangeData {
   name: string;
@@ -43,12 +44,14 @@ function coinbaseProductId(symbol: string): string {
 const EXCHANGES = [
   {
     name: "Binance",
-    wsUrl: "wss://stream.binance.com:9443/ws",
+    wsUrl: (symbol: string) =>
+      isFuturesSymbol(symbol) ? "wss://fstream.binance.com/ws" : "wss://stream.binance.com:9443/ws",
     // Only Binance drives the shared order book; the others would overwrite it
     bookAuthority: true,
     // Binance stream names must be lowercase
     subscribeMsg: (symbol: string, interval: string) => {
-      const s = `${baseAsset(symbol)}USDT`.toLowerCase();
+      const lower = symbol.toLowerCase();
+      const s = lower.endsWith("usdt") ? lower : `${lower}usdt`;
       return {
         method: "SUBSCRIBE",
         params: [`${s}@trade`, `${s}@depth20@100ms`, `${s}@kline_${interval}`],
@@ -63,15 +66,25 @@ const EXCHANGES = [
       time: new Date(d.T).toLocaleTimeString("en-US", { hour12: false }),
     }),
     isTrade: (d: any) => d.e === "trade",
-    isBook: (d: any) => Array.isArray(d.bids) && Array.isArray(d.asks),
-    parseBook: (d: any) => ({
-      bids: d.bids.slice(0, BOOK_LEVELS).map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
-      asks: d.asks.slice(0, BOOK_LEVELS).map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
-    }),
+    isBook: (d: any) =>
+      (Array.isArray(d.bids) && Array.isArray(d.asks)) ||
+      (Array.isArray(d.b) && Array.isArray(d.a)),
+    parseBook: (d: any) => {
+      const bids = d.bids ?? d.b ?? [];
+      const asks = d.asks ?? d.a ?? [];
+      return {
+        bids: bids
+          .slice(0, BOOK_LEVELS)
+          .map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
+        asks: asks
+          .slice(0, BOOK_LEVELS)
+          .map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
+      };
+    },
   },
   {
     name: "Coinbase",
-    wsUrl: "wss://ws-feed.exchange.coinbase.com",
+    wsUrl: () => "wss://ws-feed.exchange.coinbase.com",
     bookAuthority: false,
     // Coinbase product IDs are dash-separated and use USD, not USDT
     subscribeMsg: (symbol: string) => ({
@@ -91,7 +104,7 @@ const EXCHANGES = [
   },
   {
     name: "OKX",
-    wsUrl: "wss://ws.okx.com:8443/ws/v5/public",
+    wsUrl: () => "wss://ws.okx.com:8443/ws/v5/public",
     bookAuthority: false,
     // OKX instrument IDs are dash-separated
     subscribeMsg: (symbol: string) => ({
@@ -117,7 +130,7 @@ const EXCHANGES = [
     // Spot, not the linear/perp stream — the other feeds are spot too, so this
     // keeps the aggregate free of perpetual basis.
     name: "Bybit",
-    wsUrl: "wss://stream.bybit.com/v5/public/spot",
+    wsUrl: () => "wss://stream.bybit.com/v5/public/spot",
     bookAuthority: false,
     // Bybit requires a pong reply or it drops the socket after ~20s
     requiresPong: true,
@@ -147,7 +160,10 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
   const [prices, setPrices] = useState<ExchangeData[]>([]);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [orderBook, setOrderBook] = useState<{ bids: OrderBookEntry[]; asks: OrderBookEntry[] }>({ bids: [], asks: [] });
+  const [orderBook, setOrderBook] = useState<{ bids: OrderBookEntry[]; asks: OrderBookEntry[] }>({
+    bids: [],
+    asks: [],
+  });
   const [candleError, setCandleError] = useState(false);
 
   const socketsRef = useRef<WebSocket[]>([]);
@@ -166,7 +182,24 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
 
   const connectOne = (idx: number) => {
     const exchange = EXCHANGES[idx];
-    const ws = new WebSocket(exchange.wsUrl);
+    const currentSym = symbolRef.current;
+    const isFutures = isFuturesSymbol(currentSym);
+
+    // If this is a commodity/futures pair, only Binance supports it
+    if (exchange.name !== "Binance" && isFutures) {
+      const prev = pricesRef.current.get(exchange.name)!;
+      pricesRef.current.set(exchange.name, {
+        name: exchange.name,
+        connected: false,
+        price: 0,
+        lastUpdate: prev.lastUpdate,
+      });
+      setPrices(EXCHANGES.map((e) => pricesRef.current.get(e.name)!));
+      return;
+    }
+
+    const wsUrl = exchange.wsUrl(currentSym);
+    const ws = new WebSocket(wsUrl);
     socketsRef.current[idx] = ws;
 
     const markState = (connected: boolean, price?: number) => {

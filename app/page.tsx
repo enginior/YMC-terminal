@@ -98,7 +98,12 @@ export default function Home() {
         return;
       }
 
-      // 1-6 switches pair
+      // 1-9 and 0 switches pair
+      if (e.key === "0" && UNIVERSE.length >= 10) {
+        e.preventDefault();
+        setSelectedSymbol(UNIVERSE[9].label);
+        return;
+      }
       const num = parseInt(e.key, 10);
       if (!isNaN(num) && num >= 1 && num <= UNIVERSE.length) {
         e.preventDefault();
@@ -592,7 +597,17 @@ export default function Home() {
         </div>
       )}
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          onResetLayout={() => {
+            setPanelOrder([...DEFAULT_ORDER]);
+            try {
+              window.localStorage.removeItem(ORDER_KEY);
+            } catch {}
+          }}
+        />
+      )}
       {showShortcuts && <HotkeysModal onClose={() => setShowShortcuts(false)} />}
       {showNotification && <AlertNotification alert={showNotification} onDismiss={dismissNotification} />}
     </div>

@@ -4,15 +4,19 @@ import { useEffect, useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { WatchlistItem } from "@/lib/types";
 import { isChartable } from "@/lib/symbols";
+import { AssetIcon } from "@/components/AssetIcon";
 
 interface WatchlistProps {
   selected?: string;
   onSelect?: (symbol: string) => void;
 }
 
+type SortMode = "default" | "change" | "volume" | "name";
+
 export default function Watchlist({ selected, onSelect }: WatchlistProps) {
   const { theme } = useTheme();
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>("default");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -32,6 +36,7 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
             change: i.change,
             changePercent: i.changePercent,
             volume: i.volume,
+            rawVolume: i.rawVolume,
           }))
         );
         setFailed(false);
@@ -48,13 +53,55 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
     };
   }, []);
 
+  const sortedItems = [...items].sort((a, b) => {
+    if (sortMode === "change") return b.changePercent - a.changePercent;
+    if (sortMode === "volume") return (b.rawVolume ?? 0) - (a.rawVolume ?? 0);
+    if (sortMode === "name") return a.symbol.localeCompare(b.symbol);
+    return 0;
+  });
+
   return (
     <div className="h-full flex flex-col">
       <div
-        className="px-2 py-1.5 border-b text-[10px] uppercase tracking-wider shrink-0"
+        className="px-2 py-1.5 border-b text-[10px] uppercase tracking-wider shrink-0 flex items-center justify-between"
         style={{ borderColor: theme.border, color: theme.dim }}
       >
-        Watchlist
+        <span>Watchlist ({items.length})</span>
+        <div className="flex items-center gap-1 font-mono text-[9px] lowercase">
+          <button
+            onClick={() => setSortMode((m) => (m === "change" ? "default" : "change"))}
+            className="px-1 py-0.5 rounded hover:opacity-80"
+            style={{
+              color: sortMode === "change" ? theme.yellow : theme.dim,
+              background: sortMode === "change" ? `${theme.yellow}20` : "transparent",
+            }}
+            title="Sort by 24h Change % (Top Gainers first)"
+          >
+            chg%
+          </button>
+          <button
+            onClick={() => setSortMode((m) => (m === "volume" ? "default" : "volume"))}
+            className="px-1 py-0.5 rounded hover:opacity-80"
+            style={{
+              color: sortMode === "volume" ? theme.yellow : theme.dim,
+              background: sortMode === "volume" ? `${theme.yellow}20` : "transparent",
+            }}
+            title="Sort by 24h Volume (Highest volume first)"
+          >
+            vol
+          </button>
+          <button
+            onClick={() => setSortMode((m) => (m === "name" ? "default" : "name"))}
+            className="px-1 py-0.5 rounded hover:opacity-80"
+            style={{
+              color: sortMode === "name" ? theme.yellow : theme.dim,
+              background: sortMode === "name" ? `${theme.yellow}20` : "transparent",
+            }}
+            title="Sort alphabetically A-Z"
+          >
+            a-z
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -64,7 +111,7 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
           </div>
         )}
 
-        {items.map((item) => {
+        {sortedItems.map((item) => {
           const up = item.changePercent >= 0;
           const selectable = Boolean(onSelect) && isChartable(item.symbol);
           const isSelected = selected === item.symbol;
@@ -96,11 +143,14 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
               }}
             >
               <div className="flex justify-between items-baseline gap-2">
-                <span className="text-[11px] font-medium" style={{ color: theme.text }}>
-                  {item.symbol}
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <AssetIcon symbol={item.symbol} size={14} className="shrink-0" />
+                  <span className="text-[11px] font-medium truncate" style={{ color: theme.text }}>
+                    {item.symbol}
+                  </span>
+                </div>
                 <span
-                  className="text-[11px] tabular-nums"
+                  className="text-[11px] tabular-nums shrink-0"
                   style={{ color: item.price > 0 ? theme.text : theme.dim }}
                 >
                   {item.price > 0

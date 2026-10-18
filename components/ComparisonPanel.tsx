@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { AssetIcon } from "@/components/AssetIcon";
 
 interface SymbolData {
   symbol: string;
@@ -66,9 +67,12 @@ function ComparisonPanel() {
                 className="px-2 py-1.5 border-b flex justify-between items-center"
                 style={{ borderColor: `${theme.border}50` }}
               >
-                <span className="text-[11px]" style={{ color: theme.dim }}>
-                  {item.symbol}
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <AssetIcon symbol={item.symbol} size={13} className="shrink-0" />
+                  <span className="text-[11px]" style={{ color: theme.dim }}>
+                    {item.symbol}
+                  </span>
+                </div>
                 <span className="text-[10px]" style={{ color: theme.dim }}>
                   unavailable
                 </span>
@@ -89,10 +93,13 @@ function ComparisonPanel() {
               style={{ borderColor: `${theme.border}50` }}
             >
               <div className="flex justify-between items-baseline gap-2">
-                <span className="text-[11px] font-medium" style={{ color: theme.text }}>
-                  {item.symbol}
-                </span>
-                <span className="text-[11px] tabular-nums" style={{ color: theme.text }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <AssetIcon symbol={item.symbol} size={14} className="shrink-0" />
+                  <span className="text-[11px] font-medium" style={{ color: theme.text }}>
+                    {item.symbol}
+                  </span>
+                </div>
+                <span className="text-[11px] tabular-nums shrink-0" style={{ color: theme.text }}>
                   ${item.price.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: item.price < 1 ? 4 : 2,

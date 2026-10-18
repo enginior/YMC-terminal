@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UNIVERSE } from "@/lib/symbols";
+import { UNIVERSE, isFuturesSymbol } from "@/lib/symbols";
 
-const BINANCE = "https://api.binance.com/api/v3";
+const BINANCE_SPOT = "https://api.binance.com/api/v3";
+const BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1";
 
 function formatVolume(quoteVolume: number) {
   if (!Number.isFinite(quoteVolume)) return "—";
@@ -10,10 +11,6 @@ function formatVolume(quoteVolume: number) {
   return `$${(quoteVolume / 1e3).toFixed(1)}K`;
 }
 
-/**
- * Binance's /ticker/24hr accepts a symbols[] param and returns everything in one
- * request, so only the sparklines need per-symbol calls.
- */
 export async function GET(request: NextRequest) {
   const symbolsParam = request.nextUrl.searchParams.get("symbols");
   const universe = symbolsParam
@@ -25,22 +22,57 @@ export async function GET(request: NextRequest) {
     : UNIVERSE;
 
   try {
-    // Binance expects one JSON array param, not a repeated symbols= per symbol
-    const symbolsParam = encodeURIComponent(JSON.stringify(universe.map((u) => u.symbol)));
-    const tickerRes = await fetch(`${BINANCE}/ticker/24hr?symbols=${symbolsParam}`, {
-      cache: "no-store",
-    });
-    if (!tickerRes.ok) throw new Error(`ticker ${tickerRes.status}`);
-    const tickers: any[] = await tickerRes.json();
-    const bySymbol = new Map<string, any>(tickers.map((t) => [t.symbol, t]));
+    const spotItems = universe.filter((u) => !isFuturesSymbol(u.symbol));
+    const futuresItems = universe.filter((u) => isFuturesSymbol(u.symbol));
+
+    const bySymbol = new Map<string, any>();
+
+    const [spotRes, futuresRes] = await Promise.allSettled([
+      spotItems.length > 0
+        ? fetch(
+            `${BINANCE_SPOT}/ticker/24hr?symbols=${encodeURIComponent(
+              JSON.stringify(spotItems.map((u) => u.symbol))
+            )}`,
+            { cache: "no-store" }
+          )
+        : Promise.resolve(null),
+      futuresItems.length > 0
+        ? fetch(`${BINANCE_FUTURES}/ticker/24hr`, { cache: "no-store" })
+        : Promise.resolve(null),
+    ]);
+
+    if (spotRes.status === "fulfilled" && spotRes.value && spotRes.value.ok) {
+      try {
+        const spotTickers: any[] = await spotRes.value.json();
+        if (Array.isArray(spotTickers)) {
+          spotTickers.forEach((t) => bySymbol.set(t.symbol, t));
+        }
+      } catch {}
+    }
+
+    if (futuresRes.status === "fulfilled" && futuresRes.value && futuresRes.value.ok) {
+      try {
+        const futuresTickers: any[] = await futuresRes.value.json();
+        if (Array.isArray(futuresTickers)) {
+          const wanted = new Set(futuresItems.map((u) => u.symbol));
+          futuresTickers.forEach((t) => {
+            if (wanted.has(t.symbol)) {
+              bySymbol.set(t.symbol, t);
+            }
+          });
+        }
+      } catch {}
+    }
 
     const results = await Promise.all(
       universe.map(async (u) => {
         const t = bySymbol.get(u.symbol);
+        const isFutures = isFuturesSymbol(u.symbol);
 
         let sparkline: number[] = [];
         try {
-          const kRes = await fetch(`${BINANCE}/klines?symbol=${u.symbol}&interval=1h&limit=24`, {
+          const klineEndpoint = isFutures ? `${BINANCE_FUTURES}/klines` : `${BINANCE_SPOT}/klines`;
+          const kRes = await fetch(`${klineEndpoint}?symbol=${u.symbol}&interval=1h&limit=24`, {
             cache: "no-store",
           });
           if (kRes.ok) {
@@ -69,6 +101,7 @@ export async function GET(request: NextRequest) {
           change: parseFloat(t.priceChange),
           changePercent: parseFloat(t.priceChangePercent),
           volume: formatVolume(parseFloat(t.quoteVolume)),
+          rawVolume: parseFloat(t.quoteVolume),
           sparkline,
         };
       })

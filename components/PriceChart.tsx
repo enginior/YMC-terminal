@@ -13,6 +13,7 @@ import {
   UTCTimestamp,
   HistogramData,
   Time,
+  IPriceLine,
 } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { useTheme, Theme } from "@/context/ThemeContext";
@@ -127,6 +128,8 @@ export default function PriceChart({
   const [menuOpen, setMenuOpen] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
   const [showDayLines, setShowDayLines] = useState(true);
+  const [showSessionHL, setShowSessionHL] = useState(false);
+  const sessionLinesRef = useRef<IPriceLine[]>([]);
   const [drawMode, setDrawMode] = useState<DrawMode>("none");
   const [magnetOn, setMagnetOn] = useState(false);
   // Drawings are kept per symbol so switching pairs (and reloading) restores them.
@@ -378,6 +381,7 @@ export default function PriceChart({
       volumeSeriesRef.current = null;
       dayLinesRef.current = null;
       drawingsPrimRef.current = null;
+      sessionLinesRef.current = [];
       indicatorRefs.current.clear();
       // Panes belong to the disposed chart; drop the refs so a fresh chart
       // rebuilds them instead of reusing dead handles.
@@ -457,6 +461,52 @@ export default function PriceChart({
       theme.dim
     );
   }, [candles, showDayLines, theme]);
+
+  // 24H Session High / Low watermark lines
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
+
+    sessionLinesRef.current.forEach((l) => {
+      try {
+        series.removePriceLine(l);
+      } catch {}
+    });
+    sessionLinesRef.current = [];
+
+    if (!showSessionHL || candles.length === 0) return;
+
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (const c of candles) {
+      if (c.high > hi) hi = c.high;
+      if (c.low < lo) lo = c.low;
+    }
+
+    if (!Number.isFinite(hi) || !Number.isFinite(lo)) return;
+
+    const highLine = series.createPriceLine({
+      price: hi,
+      color: theme.green,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lineVisible: true,
+      axisLabelVisible: true,
+      title: "24H HI",
+    });
+
+    const lowLine = series.createPriceLine({
+      price: lo,
+      color: theme.red,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      lineVisible: true,
+      axisLabelVisible: true,
+      title: "24H LO",
+    });
+
+    sessionLinesRef.current = [highLine, lowLine];
+  }, [candles, showSessionHL, theme]);
 
   /* ---------------- indicators ---------------- */
 
@@ -1000,6 +1050,15 @@ export default function PriceChart({
           title="UTC day boundaries"
         >
           DAY
+        </button>
+
+        <button
+          onClick={() => setShowSessionHL((v) => !v)}
+          className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70"
+          style={{ color: showSessionHL ? theme.yellow : theme.dim }}
+          title="Toggle 24H Session High / Low price watermark lines"
+        >
+          H/L
         </button>
 
         <div className="relative">

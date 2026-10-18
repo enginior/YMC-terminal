@@ -43,7 +43,12 @@ function rgbaToHex(rgba: string) {
   return "#" + [m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("");
 }
 
-export default function SettingsPanel({ onClose }: { onClose: () => void }) {
+interface SettingsPanelProps {
+  onClose: () => void;
+  onResetLayout?: () => void;
+}
+
+export default function SettingsPanel({ onClose, onResetLayout }: SettingsPanelProps) {
   const {
     theme,
     updateTheme,
@@ -267,12 +272,22 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex gap-2 mt-4 pt-3" style={{ borderTop: `1px solid ${theme.border}` }}>
+          {onResetLayout && (
+            <button
+              onClick={onResetLayout}
+              className="flex-1 rounded py-1.5 text-xs border hover:opacity-80"
+              style={{ borderColor: theme.border, color: theme.dim }}
+              title="Reset grid panel order to default Bloomberg layout"
+            >
+              Reset Layout
+            </button>
+          )}
           <button
             onClick={resetTheme}
             className="flex-1 rounded py-1.5 text-xs border hover:opacity-80"
             style={{ borderColor: theme.border, color: theme.text }}
           >
-            Reset
+            Reset Theme
           </button>
           <button
             onClick={onClose}

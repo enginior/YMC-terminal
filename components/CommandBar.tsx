@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTheme } from "@/context/ThemeContext";
 import { REPO_URL } from "@/lib/links";
 import { CHART_LABELS, resolvePrefix } from "@/lib/symbols";
+import { AssetIcon } from "@/components/AssetIcon";
 
 interface CommandBarProps {
   onCommand: (cmd: string) => void;
@@ -68,7 +69,17 @@ export default function CommandBar({
       className="h-11 border-b flex items-center px-3.5 gap-4 shrink-0"
       style={{ background: theme.panel, borderColor: theme.border }}
     >
-      <div className="font-bold text-base tracking-wider" style={{ color: theme.yellow }}>YMC TERMINAL</div>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="font-bold text-base tracking-wider" style={{ color: theme.yellow }}>
+          YMC TERMINAL
+        </div>
+        <span
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded border hidden sm:inline-block leading-none"
+          style={{ borderColor: `${theme.border}80`, color: theme.dim }}
+        >
+          v0.1.3
+        </span>
+      </div>
       <form onSubmit={handleSubmit} className="flex-1 max-w-md">
         <input
           ref={inputRef}
@@ -92,14 +103,15 @@ export default function CommandBar({
             <button
               key={s}
               onClick={() => onSelectSymbol(s)}
-              className="text-[11px] px-1.5 py-0.5 rounded hover:opacity-70"
+              className="text-[11px] px-1.5 py-0.5 rounded hover:opacity-70 flex items-center gap-1"
               style={{
                 color: selectedSymbol === s ? theme.bg : theme.dim,
                 background: selectedSymbol === s ? theme.text : "transparent",
               }}
               title={`Chart ${s}`}
             >
-              {s.replace("/USDT", "")}
+              <AssetIcon symbol={s} size={11} className="shrink-0" />
+              <span>{s.replace("/USDT", "")}</span>
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTheme } from "@/context/ThemeContext";
+import { AssetIcon } from "@/components/AssetIcon";
 
 export interface TickerStats {
   lastPrice: number;
@@ -12,6 +13,7 @@ export interface TickerStats {
   volume: number;
   quoteVolume: number;
   trades: number;
+  markPrice?: number | null;
 }
 
 interface MarketStatsProps {
@@ -48,11 +50,15 @@ export default function MarketStats({ symbol, price, direction, ticker, connecte
   const up = ticker ? ticker.priceChange >= 0 : direction === "up";
   const changeColor = up ? theme.green : theme.red;
 
+  const basis = ticker?.markPrice != null && price > 0 ? ticker.markPrice - price : null;
+  const basisPct = basis != null && price > 0 ? (basis / price) * 100 : null;
+
   return (
     <div className="h-full flex items-center px-4 gap-6 overflow-hidden">
       <div className="shrink-0">
         <div className="text-[10px] uppercase tracking-wider flex items-center gap-1.5" style={{ color: theme.dim }}>
-          {symbol}
+          <AssetIcon symbol={symbol} size={13} className="shrink-0" />
+          <span>{symbol}</span>
           <span
             className="w-1.5 h-1.5 rounded-full inline-block"
             title={connected ? "Live" : "Disconnected"}
@@ -66,7 +72,7 @@ export default function MarketStats({ symbol, price, direction, ticker, connecte
 
       <div className="h-8 w-px shrink-0" style={{ background: theme.border }} />
 
-      <div className="grid grid-cols-5 gap-6 text-xs min-w-0">
+      <div className="grid grid-cols-6 gap-4 text-xs min-w-0">
         <div className="min-w-0">
           <div className="text-[10px]" style={{ color: theme.dim }}>24h Change</div>
           <div className="tabular-nums truncate" style={{ color: ticker ? changeColor : theme.dim }}>
@@ -93,6 +99,19 @@ export default function MarketStats({ symbol, price, direction, ticker, connecte
           <div className="text-[10px]" style={{ color: theme.dim }}>24h Low</div>
           <div className="tabular-nums truncate" style={{ color: ticker ? theme.text : theme.dim }}>
             {ticker ? fmtUsd(ticker.low) : "—"}
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-[10px]" style={{ color: theme.dim }}>Basis (Perp Spread)</div>
+          <div className="tabular-nums truncate" style={{ color: basis != null ? (basis >= 0 ? theme.green : theme.red) : theme.dim }}>
+            {basis != null && basisPct != null ? (
+              <>
+                {basis >= 0 ? "+" : ""}${basis.toFixed(2)} ({basis >= 0 ? "+" : ""}{basisPct.toFixed(2)}%)
+              </>
+            ) : (
+              "—"
+            )}
           </div>
         </div>
 

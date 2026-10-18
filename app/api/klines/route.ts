@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isFuturesSymbol } from "@/lib/symbols";
 
 const STATIC_ROOT = "https://finom.github.io/static-klines/api/klines";
-const BINANCE = "https://api.binance.com/api/v3/klines";
+const BINANCE_SPOT = "https://api.binance.com/api/v3/klines";
+const BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1/klines";
 
 // Intervals static-klines actually publishes, and the calendar window each file covers
 const STATIC_SUPPORTED = new Set(["15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]);
@@ -97,14 +99,36 @@ function staticWindows(interval: string, count: number): string[] {
   return out;
 }
 
-async function fromBinance(symbol: string, interval: string, limit: number, startTime?: number) {
-  const url = new URL(BINANCE);
+async function fromBinance(
+  symbol: string,
+  interval: string,
+  limit: number,
+  startTime?: number,
+  endTime?: number
+) {
+  const isFutures = isFuturesSymbol(symbol);
+  const endpoint = isFutures ? BINANCE_FUTURES : BINANCE_SPOT;
+
+  const url = new URL(endpoint);
   url.searchParams.set("symbol", symbol);
   url.searchParams.set("interval", interval);
   url.searchParams.set("limit", String(Math.min(limit, 1000)));
   if (startTime) url.searchParams.set("startTime", String(startTime));
+  if (endTime) url.searchParams.set("endTime", String(endTime));
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  let res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok && !isFutures) {
+    // If spot failed, try futures endpoint as fallback
+    const fUrl = new URL(BINANCE_FUTURES);
+    fUrl.searchParams.set("symbol", symbol);
+    fUrl.searchParams.set("interval", interval);
+    fUrl.searchParams.set("limit", String(Math.min(limit, 1000)));
+    if (startTime) fUrl.searchParams.set("startTime", String(startTime));
+    if (endTime) fUrl.searchParams.set("endTime", String(endTime));
+    const fRes = await fetch(fUrl.toString(), { cache: "no-store" });
+    if (fRes.ok) res = fRes;
+  }
+
   if (!res.ok) throw new Error(`binance ${res.status}`);
   const data = await res.json();
   if (!Array.isArray(data)) throw new Error("bad payload");
@@ -115,6 +139,7 @@ export async function GET(request: NextRequest) {
   const symbol = (request.nextUrl.searchParams.get("symbol") || "BTCUSDT").toUpperCase();
   const interval = normalize(request.nextUrl.searchParams.get("interval") || "1h");
   const live = request.nextUrl.searchParams.get("live") === "1";
+  const isFutures = isFuturesSymbol(symbol);
 
   try {
     // Live tick: just the newest candle, straight from Binance
@@ -123,6 +148,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(candles, {
         headers: { "Cache-Control": "no-store" },
       });
+    }
+
+    // Commodities / Futures symbols (XAU, XAG, CL) are served directly from Binance Futures
+    if (isFutures) {
+      const pages = 2;
+      const perPage = 1000;
+      let endTime: number | undefined;
+      const all: ReturnType<typeof toCandle>[] = [];
+
+      for (let i = 0; i < pages; i++) {
+        try {
+          const candles = await fromBinance(symbol, interval, perPage, undefined, endTime);
+          if (candles.length === 0) break;
+          all.unshift(...candles);
+          if (candles.length < perPage) break;
+          endTime = candles[0].time * 1000 - 1;
+        } catch {
+          break;
+        }
+      }
+
+      const deduped = dedupe(all);
+      if (deduped.length > 0) {
+        return NextResponse.json(deduped, { headers: { "Cache-Control": "s-maxage=60" } });
+      }
     }
 
     const useStatic = STATIC_SUPPORTED.has(interval);
@@ -135,20 +185,12 @@ export async function GET(request: NextRequest) {
       const all: ReturnType<typeof toCandle>[] = [];
 
       for (let i = 0; i < pages; i++) {
-        const url = new URL(BINANCE);
-        url.searchParams.set("symbol", symbol);
-        url.searchParams.set("interval", interval);
-        url.searchParams.set("limit", String(perPage));
-        if (endTime) url.searchParams.set("endTime", String(endTime));
+        const candles = await fromBinance(symbol, interval, perPage, undefined, endTime);
+        if (candles.length === 0) break;
 
-        const res = await fetch(url.toString(), { cache: "no-store" });
-        if (!res.ok) break;
-        const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) break;
-
-        all.unshift(...data.map(toCandle));
-        if (data.length < perPage) break;
-        endTime = data[0][0] - 1;
+        all.unshift(...candles);
+        if (candles.length < perPage) break;
+        endTime = candles[0].time * 1000 - 1;
       }
 
       const deduped = dedupe(all);

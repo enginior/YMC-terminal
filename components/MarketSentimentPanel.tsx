@@ -10,6 +10,9 @@ interface SentimentData {
   fundingRate: number | null;
   markPrice: number | null;
   openInterest: number | null;
+  longShortRatio: number | null;
+  longAccount: number | null;
+  shortAccount: number | null;
   hasDerivatives: boolean;
 }
 
@@ -168,36 +171,69 @@ function MarketSentimentPanel({ symbol = "BTC/USDT" }: MarketSentimentPanelProps
           </div>
 
           {hasPerp ? (
-            <div className="grid grid-cols-2 gap-1 text-[10px]">
-              <div className="p-1 rounded" style={{ background: `${theme.border}40` }}>
-                <div className="flex items-baseline justify-between text-[9px] mb-0.5">
-                  <span style={{ color: theme.dim }}>Funding (8h)</span>
-                  <span className="tabular-nums" style={{ color: theme.yellow }} title="Countdown to next 8h funding settlement">
-                    ⏱ {countdown}
-                  </span>
+            <>
+              <div className="grid grid-cols-2 gap-1 text-[10px]">
+                <div className="p-1 rounded" style={{ background: `${theme.border}40` }}>
+                  <div className="flex items-baseline justify-between text-[9px] mb-0.5">
+                    <span style={{ color: theme.dim }}>Funding (8h)</span>
+                    <span className="tabular-nums" style={{ color: theme.yellow }} title="Countdown to next 8h funding settlement">
+                      ⏱ {countdown}
+                    </span>
+                  </div>
+                  <div className="tabular-nums font-bold" style={{ color: frPct >= 0 ? theme.green : theme.red }}>
+                    {frPct >= 0 ? "+" : ""}
+                    {frPct.toFixed(4)}%
+                  </div>
+                  <div className="text-[8px] tabular-nums" style={{ color: theme.dim }}>
+                    {aprPct >= 0 ? "+" : ""}
+                    {aprPct.toFixed(1)}% APR
+                  </div>
                 </div>
-                <div className="tabular-nums font-bold" style={{ color: frPct >= 0 ? theme.green : theme.red }}>
-                  {frPct >= 0 ? "+" : ""}
-                  {frPct.toFixed(4)}%
-                </div>
-                <div className="text-[8px] tabular-nums" style={{ color: theme.dim }}>
-                  {aprPct >= 0 ? "+" : ""}
-                  {aprPct.toFixed(1)}% APR
+
+                <div className="p-1 rounded" style={{ background: `${theme.border}40` }}>
+                  <div style={{ color: theme.dim }} className="text-[9px]">
+                    Open Interest
+                  </div>
+                  <div className="tabular-nums font-bold" style={{ color: theme.text }}>
+                    {fmtCompact(data?.openInterest ?? null)}
+                  </div>
+                  <div className="text-[8px] tabular-nums" style={{ color: theme.dim }}>
+                    Mark: ${data?.markPrice ? data.markPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}
+                  </div>
                 </div>
               </div>
 
-              <div className="p-1 rounded" style={{ background: `${theme.border}40` }}>
-                <div style={{ color: theme.dim }} className="text-[9px]">
-                  Open Interest
+              {data?.longShortRatio != null && data?.longAccount != null && (
+                <div className="mt-2 p-1.5 rounded" style={{ background: `${theme.border}40` }}>
+                  <div className="flex items-center justify-between text-[9px] mb-1">
+                    <span style={{ color: theme.dim }}>Global Long / Short Ratio</span>
+                    <span className="font-bold tabular-nums" style={{ color: theme.yellow }}>
+                      {data.longShortRatio.toFixed(2)} L/S
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full flex overflow-hidden w-full my-1" style={{ background: theme.border }}>
+                    <div
+                      className="h-full transition-all duration-300"
+                      style={{ width: `${data.longAccount}%`, background: theme.green }}
+                      title={`Long Accounts: ${data.longAccount.toFixed(1)}%`}
+                    />
+                    <div
+                      className="h-full transition-all duration-300"
+                      style={{ width: `${data.shortAccount ?? (100 - data.longAccount)}%`, background: theme.red }}
+                      title={`Short Accounts: ${(data.shortAccount ?? (100 - data.longAccount)).toFixed(1)}%`}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[8px] tabular-nums">
+                    <span style={{ color: theme.green }}>
+                      Long: {data.longAccount.toFixed(1)}%
+                    </span>
+                    <span style={{ color: theme.red }}>
+                      Short: {(data.shortAccount ?? (100 - data.longAccount)).toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-                <div className="tabular-nums font-bold" style={{ color: theme.text }}>
-                  {fmtCompact(data?.openInterest ?? null)}
-                </div>
-                <div className="text-[8px] tabular-nums" style={{ color: theme.dim }}>
-                  Mark: ${data?.markPrice ? data.markPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}
-                </div>
-              </div>
-            </div>
+              )}
+            </>
           ) : (
             <div className="p-2 text-center text-[10px] rounded border" style={{ borderColor: `${theme.border}80`, color: theme.dim }}>
               {displayAsset} has no Binance perpetual futures contract.

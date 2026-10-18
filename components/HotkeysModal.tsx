@@ -15,7 +15,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Market Navigation",
     shortcuts: [
-      { keys: ["1", "–", "6"], description: "Select pair (1: BTC, 2: ETH, 3: SOL, 4: XRP, 5: BNB, 6: GOLD)" },
+      { keys: ["1", "–", "9", "0"], description: "Select pair (1: BTC, 2: ETH, 3: SOL, 4: XRP, 5: BNB, 6: DOGE, 7: SUI, 8: AVAX, 9: LINK, 0: XAU)" },
       { keys: ["/"], description: "Focus symbol search / command bar" },
       { keys: ["Esc"], description: "Clear search, close dialogs, deselect drawings" },
       { keys: ["?"], description: "Toggle this shortcut cheat sheet" },
