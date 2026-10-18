@@ -97,7 +97,7 @@ lib/
 | static-klines | Historical OHLCV to 2010 | `finom.github.io/static-klines/api/klines/` |
 
 ## Key Conventions
-- **Timeframes are lowercase Binance codes** (`1m 5m 15m 1h 4h 1d`). The API route normalizes, but keep the UI consistent or the selected-button check breaks.
+- **Timeframes are lowercase Binance codes** (`1m 5m 15m 30m 1h 2h 4h 1d`). The API route normalizes, but keep the UI consistent or the selected-button check breaks.
 - All colors come from `useTheme()`. Never hardcode hex or Tailwind color classes in components.
 - Side panels are wrapped in `<Panel>`; only its grip strip is draggable. Do not put `draggable` on a panel body — it breaks text selection and scrolling.
 - One WebSocket authority per data type: Binance drives the order book, all four feeds the price aggregate. Unsubscribed streams are explicitly `false` in `EXCHANGES`.

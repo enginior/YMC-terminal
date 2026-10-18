@@ -25,13 +25,43 @@ function fmtCompact(val: number | null): string {
   return "$" + val.toFixed(2);
 }
 
+function getNextFundingCountdown(): string {
+  const now = new Date();
+  const currentUtcHour = now.getUTCHours();
+  const targetHour = currentUtcHour < 8 ? 8 : currentUtcHour < 16 ? 16 : 24;
+  
+  const target = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    targetHour,
+    0,
+    0,
+    0
+  ));
+  
+  const diffMs = Math.max(0, target.getTime() - now.getTime());
+  const hours = Math.floor(diffMs / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+  const seconds = Math.floor((diffMs % 60000) / 1000);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
 function MarketSentimentPanel({ symbol = "BTC/USDT" }: MarketSentimentPanelProps) {
   const { theme } = useTheme();
   const [data, setData] = useState<SentimentData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState(getNextFundingCountdown);
 
   const binanceSymbol = toBinanceSymbol(symbol) ?? "BTCUSDT";
   const displayAsset = symbol.replace("/USDT", "");
+
+  useEffect(() => {
+    const id = setInterval(() => setCountdown(getNextFundingCountdown()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +170,11 @@ function MarketSentimentPanel({ symbol = "BTC/USDT" }: MarketSentimentPanelProps
           {hasPerp ? (
             <div className="grid grid-cols-2 gap-1 text-[10px]">
               <div className="p-1 rounded" style={{ background: `${theme.border}40` }}>
-                <div style={{ color: theme.dim }} className="text-[9px]">
-                  Funding Rate (8h)
+                <div className="flex items-baseline justify-between text-[9px] mb-0.5">
+                  <span style={{ color: theme.dim }}>Funding (8h)</span>
+                  <span className="tabular-nums" style={{ color: theme.yellow }} title="Countdown to next 8h funding settlement">
+                    ⏱ {countdown}
+                  </span>
                 </div>
                 <div className="tabular-nums font-bold" style={{ color: frPct >= 0 ? theme.green : theme.red }}>
                   {frPct >= 0 ? "+" : ""}

@@ -9,7 +9,9 @@ const STATIC_SUPPORTED = new Set(["15m", "30m", "1h", "2h", "4h", "6h", "8h", "1
 // How far back to page through static history, per interval
 const WINDOW_DEPTH: Record<string, number> = {
   "15m": 2, // ~2 weeks
+  "30m": 4, // ~4 weeks
   "1h": 12, // ~1 year
+  "2h": 12, // ~1 year
   "4h": 8, // ~2 years
   "1d": 6, // ~12 years
   "1w": 2,

@@ -6,10 +6,12 @@ import type {
   IPrimitivePaneRenderer,
   SeriesAttachedParameter,
   Time,
+  Logical,
+  ITimeScaleApi,
 } from "lightweight-charts";
 import type { CanvasRenderingTarget2D } from "fancy-canvas";
 
-export type DrawingTool = "level" | "trend" | "rect";
+export type DrawingTool = "level" | "trend" | "rect" | "ruler";
 
 export interface Drawing {
   id: string;
@@ -43,11 +45,41 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const HIT_TOLERANCE = 6;
 const HANDLE_INSET = 14;
 
+/** Converts a timestamp to an X-coordinate in CSS pixels, extrapolating into whitespace/future bars if needed. */
+export function timeToCoordinateExtrapolated(
+  time: number,
+  timeScale: ITimeScaleApi<Time>,
+  candles?: { time: number }[]
+): number | null {
+  const direct = timeScale.timeToCoordinate(time as Time);
+  if (direct !== null) return direct;
+
+  if (!candles || candles.length === 0) return null;
+  const lastCandle = candles[candles.length - 1];
+  const step = candles.length >= 2 ? Math.max(1, lastCandle.time - candles[candles.length - 2].time) : 60;
+  const lastIdx = candles.length - 1;
+  const targetLogical = lastIdx + (time - lastCandle.time) / step;
+
+  // 1. Try native logicalToCoordinate
+  const directLogicalCoord = timeScale.logicalToCoordinate(targetLogical as Logical);
+  if (directLogicalCoord !== null) return directLogicalCoord;
+
+  // 2. If logical index is outside visible viewport, extrapolate from visible logical range
+  const range = timeScale.getVisibleLogicalRange();
+  if (!range) return null;
+  const fromX = timeScale.logicalToCoordinate(range.from as Logical);
+  const toX = timeScale.logicalToCoordinate(range.to as Logical);
+  if (fromX === null || toX === null || range.to === range.from) return null;
+  const pxPerBar = (toX - fromX) / (range.to - range.from);
+  return fromX + (targetLogical - range.from) * pxPerBar;
+}
+
 /** Pixel geometry for a drawing, or null when it falls outside the pane. */
 export function drawingGeometry(
   d: Drawing,
   chart: IChartApi,
-  series: ISeriesApi<"Candlestick">
+  series: ISeriesApi<"Candlestick">,
+  candles?: { time: number }[]
 ): DrawingGeometry | null {
   const timeScale = chart.timeScale();
   if (d.tool === "level") {
@@ -56,8 +88,8 @@ export function drawingGeometry(
     const w = timeScale.width();
     return { kind: "level", points: [{ x: 0, y }, { x: w, y }] };
   }
-  const x1 = timeScale.timeToCoordinate(d.time1 as Time);
-  const x2 = timeScale.timeToCoordinate(d.time2 as Time);
+  const x1 = timeToCoordinateExtrapolated(d.time1, timeScale, candles);
+  const x2 = timeToCoordinateExtrapolated(d.time2, timeScale, candles);
   const y1 = series.priceToCoordinate(d.price1);
   const y2 = series.priceToCoordinate(d.price2);
   if (x1 === null || x2 === null || y1 === null || y2 === null) return null;
@@ -82,9 +114,10 @@ export function hitTestDrawing(
   p: Point,
   chart: IChartApi,
   series: ISeriesApi<"Candlestick">,
-  tolerance = HIT_TOLERANCE
+  tolerance = HIT_TOLERANCE,
+  candles?: { time: number }[]
 ): boolean {
-  const g = drawingGeometry(d, chart, series);
+  const g = drawingGeometry(d, chart, series, candles);
   if (!g) return false;
   if (g.kind === "level") return Math.abs(p.y - g.points[0].y) <= tolerance;
 
@@ -102,9 +135,10 @@ export function hitTestDrawing(
 export function deleteHandlePoint(
   d: Drawing,
   chart: IChartApi,
-  series: ISeriesApi<"Candlestick">
+  series: ISeriesApi<"Candlestick">,
+  candles?: { time: number }[]
 ): Point | null {
-  const g = drawingGeometry(d, chart, series);
+  const g = drawingGeometry(d, chart, series, candles);
   if (!g) return null;
   if (g.kind === "level") {
     // Keep clear of the right-edge price chip.
@@ -152,6 +186,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
   private hoveredId: string | null = null;
   private selectedId: string | null = null;
   private style: DrawingsStyle = { labelBg: "#111111" };
+  private candles: { time: number }[] = [];
   private readonly views: IPrimitivePaneView[];
 
   constructor() {
@@ -161,6 +196,11 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
 
   setDrawings(drawings: Drawing[]): void {
     this.drawings = drawings;
+    this.requestUpdate();
+  }
+
+  setCandles(candles: { time: number }[]): void {
+    this.candles = candles;
     this.requestUpdate();
   }
 
@@ -222,7 +262,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       context.textBaseline = "middle";
 
       for (const item of items) {
-        const g = drawingGeometry(item, chart, series);
+        const g = drawingGeometry(item, chart, series, this.candles);
         if (!g) continue;
 
         const isDraft = item === this.draft;
@@ -264,6 +304,44 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.setLineDash(isDraft ? dash : []);
           context.strokeRect(rx, ry, rw, rh);
           context.setLineDash([]);
+
+          if (item.tool === "ruler") {
+            // Draw diagonal line connecting anchor points
+            context.setLineDash(dash);
+            context.beginPath();
+            context.moveTo(px(a.x), py(a.y));
+            context.lineTo(px(b.x), py(b.y));
+            context.stroke();
+            context.setLineDash([]);
+
+            // Calculate price delta and percentage
+            const deltaP = item.price2 - item.price1;
+            const deltaPct = item.price1 !== 0 ? (deltaP / item.price1) * 100 : 0;
+            const sign = deltaP >= 0 ? "+" : "";
+            const priceStr = `${sign}$${deltaP.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${sign}${deltaPct.toFixed(2)}%)`;
+
+            // Draw delta badge in center of measurement region
+            const midX = rx + rw / 2;
+            const midY = ry + rh / 2;
+            const textW = context.measureText(priceStr).width;
+            const padX = 6 * hx;
+            const padY = 3 * vy;
+            const badgeW = textW + padX * 2;
+            const badgeH = 12 * vy + padY * 2;
+
+            context.save();
+            context.globalAlpha = 0.92;
+            context.fillStyle = this.style.labelBg;
+            context.fillRect(midX - badgeW / 2, midY - badgeH / 2, badgeW, badgeH);
+            context.strokeStyle = item.color;
+            context.lineWidth = 1 * hx;
+            context.strokeRect(midX - badgeW / 2, midY - badgeH / 2, badgeW, badgeH);
+
+            context.globalAlpha = 1;
+            context.fillStyle = item.color;
+            context.fillText(priceStr, midX - textW / 2, midY);
+            context.restore();
+          }
         }
 
         if (isSelected && !isDraft) {
@@ -298,7 +376,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       }
     }
 
-    const del = deleteHandlePoint(item, this.chart!, this.series!);
+    const del = deleteHandlePoint(item, this.chart!, this.series!, this.candles);
     if (!del) return;
     const cx = del.x * hx;
     const cy = del.y * vy;

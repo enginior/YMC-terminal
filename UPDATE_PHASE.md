@@ -15,20 +15,20 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 
 ## 2. Priority Matrix (Impact vs. Effort)
 
-| Category | Initiative | Impact | Effort | Priority |
-|---|---|---|---|---|
-| **Perpetuals** | Dynamic Symbol Funding & Open Interest | High | Low | **P0** |
-| **UI/UX** | Keyboard Hotkeys & Cheat Sheet Modal (`?`, `1`-`6`, `[`, `]`) | High | Low | **P0** |
-| **Charting** | Chart PNG Snapshot & OHLCV CSV Export | Medium | Low | **P0** |
-| **Perpetuals** | Next Funding Countdown & Annualized APR | High | Medium | **P1** |
-| **UI/UX** | Bloomberg Command Bar Action Syntax (`BTC 15M`, `ALERT 75K`) | High | Medium | **P1** |
-| **Perpetuals** | Live Perpetual Liquidation Tape (`!forceOrder@arr`) | High | Medium | **P1** |
-| **Charting** | Price & Percentage Delta Measurement Tool (Ruler) | High | Medium | **P1** |
-| **UI/UX** | Panel Maximize / Fullscreen Focus Mode | High | Medium | **P1** |
-| **Derivatives**| Global Long/Short Account Ratio Widget | Medium | Low | **P2** |
-| **Watchlist** | Expand Perp Universe + Sort (Change %, Volume) | Medium | Medium | **P2** |
-| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P2** |
-| **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P3** |
+| Category | Initiative | Impact | Effort | Priority | Status |
+|---|---|---|---|---|---|
+| **Perpetuals** | Dynamic Symbol Funding & Open Interest | High | Low | **P0** | ✅ Completed (`9a66b15`) |
+| **UI/UX** | Keyboard Hotkeys & Cheat Sheet Modal (`?`, `1`-`6`, `[`, `]`) | High | Low | **P0** | ✅ Completed (`9a66b15`) |
+| **Charting** | Chart PNG Snapshot & OHLCV CSV Export | Medium | Low | **P0** | ✅ Completed (`9a66b15`) |
+| **Perpetuals** | Next Funding Countdown & Annualized APR | High | Medium | **P1** | ✅ Ready for Audit |
+| **UI/UX** | Bloomberg Command Bar Action Syntax (`BTC 15M`, `THEME`, etc.) | High | Medium | **P1** | ✅ Ready for Audit |
+| **Perpetuals** | Live Perpetual Liquidation Feed (`!forceOrder@arr`) | High | Medium | **P1** | ✅ Ready for Audit |
+| **Charting** | Price & Percentage Delta Measurement Tool (Ruler) | High | Medium | **P1** | ✅ Ready for Audit |
+| **UI/UX** | Panel Maximize / Fullscreen Focus Mode (`f` / `⤢`) | High | Medium | **P1** | ✅ Ready for Audit |
+| **Derivatives**| Global Long/Short Account Ratio Widget | Medium | Low | **P2** | Planned |
+| **Watchlist** | Expand Perp Universe + Sort (Change %, Volume) | Medium | Medium | **P2** | Planned |
+| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P2** | Planned |
+| **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P3** | Planned |
 
 ---
 

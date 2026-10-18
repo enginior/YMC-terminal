@@ -24,7 +24,8 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Chart Controls",
     shortcuts: [
-      { keys: ["[", "]"], description: "Cycle timeframe down / up (1m, 5m, 15m, 1h, 4h, 1d)" },
+      { keys: ["[", "]"], description: "Cycle timeframe down / up (1m, 5m, 15m, 30m, 1h, 2h, 4h, 1d)" },
+      { keys: ["f"], description: "Toggle maximize / solo panel focus mode" },
       { keys: ["v"], description: "Toggle volume histogram bars" },
       { keys: ["d"], description: "Toggle UTC day boundary lines" },
       { keys: ["m"], description: "Toggle OHLC magnet snap mode" },
@@ -33,9 +34,18 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Drawings & Tools",
     shortcuts: [
-      { keys: ["Click"], description: "Select a level, trendline, or box drawing" },
-      { keys: ["Del", "Bksp"], description: "Delete selected drawing" },
+      { keys: ["Click"], description: "Select a level, trendline, box, or ruler measurement" },
+      { keys: ["Del", "Bksp"], description: "Delete selected drawing or measurement" },
       { keys: ["Esc"], description: "Cancel in-progress drawing or clear selection" },
+    ],
+  },
+  {
+    title: "Command Bar Commands (Press / to focus)",
+    shortcuts: [
+      { keys: ["BTC 15M"], description: "Jump directly to symbol + timeframe" },
+      { keys: ["THEME MATRIX"], description: "Switch theme preset (DEFAULT, MATRIX, etc.)" },
+      { keys: ["FULL / MAX"], description: "Maximize active chart to solo focus mode" },
+      { keys: ["GRID"], description: "Restore Bloomberg multi-panel grid layout" },
     ],
   },
 ];

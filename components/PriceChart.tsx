@@ -19,10 +19,10 @@ import { useTheme, Theme } from "@/context/ThemeContext";
 import { sma, ema, rsi, macd, bollingerBands, stochRsi } from "@/lib/indicators";
 import { PriceBandPrimitive } from "@/lib/bands";
 import { DayLinesPrimitive, utcDayBoundaries } from "@/lib/dayLines";
-import { DrawingsPrimitive, Drawing, DrawingTool, hitTestDrawing, deleteHandlePoint } from "@/lib/drawings";
+import { DrawingsPrimitive, Drawing, DrawingTool, hitTestDrawing, deleteHandlePoint, timeToCoordinateExtrapolated } from "@/lib/drawings";
 
 // Binance interval codes — lowercase, matching /api/klines
-const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
 
 type OverlayIndicator = "sma" | "ema" | "bollinger";
 type PaneIndicator = "rsi" | "macd" | "stochrsi";
@@ -104,6 +104,8 @@ interface PriceChartProps {
   timeframe: string;
   onTimeframeChange: (tf: string) => void;
   candleError?: boolean;
+  onToggleMaximize?: () => void;
+  isMaximized?: boolean;
 }
 
 export default function PriceChart({
@@ -112,6 +114,8 @@ export default function PriceChart({
   timeframe,
   onTimeframeChange,
   candleError = false,
+  onToggleMaximize,
+  isMaximized = false,
 }: PriceChartProps) {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,7 +236,7 @@ export default function PriceChart({
       },
       width: container.clientWidth,
       height: container.clientHeight,
-      timeScale: { timeVisible: true, secondsVisible: false },
+      timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 12 },
       rightPriceScale: { borderColor: theme.border },
     });
 
@@ -265,6 +269,7 @@ export default function PriceChart({
     candleSeries.attachPrimitive(drawingsPrim);
     drawingsPrim.setStyle({ labelBg: theme.panel });
     drawingsPrim.setDrawings(stateRef.current.drawings);
+    drawingsPrim.setCandles(stateRef.current.candles);
     drawingsPrimRef.current = drawingsPrim;
 
     /* ---- hover + select, only while no tool is active ---- */
@@ -272,7 +277,7 @@ export default function PriceChart({
     const topmostAt = (p: { x: number; y: number }): string | null => {
       const list = stateRef.current.drawings;
       for (let i = list.length - 1; i >= 0; i--) {
-        if (hitTestDrawing(list[i], p, chart, candleSeries)) return list[i].id;
+        if (hitTestDrawing(list[i], p, chart, candleSeries, undefined, stateRef.current.candles)) return list[i].id;
       }
       return null;
     };
@@ -324,7 +329,7 @@ export default function PriceChart({
       // A click on the selected drawing's delete button removes it.
       const sel = stateRef.current.drawings.find((d) => d.id === selectedRef.current);
       if (sel) {
-        const h = deleteHandlePoint(sel, chart, candleSeries);
+        const h = deleteHandlePoint(sel, chart, candleSeries, stateRef.current.candles);
         if (h && Math.hypot(p.x - h.x, p.y - h.y) <= 12) {
           removeDrawingById(sel.id);
           return;
@@ -694,8 +699,9 @@ export default function PriceChart({
     if (!prim) return;
     prim.setStyle({ labelBg: theme.panel });
     prim.setDrawings(drawings);
+    prim.setCandles(candles);
     prim.setInteraction(hoveredRef.current, selectedRef.current);
-  }, [drawings, theme]);
+  }, [drawings, theme, candles]);
 
   // Drop any selection when the symbol changes — it belongs to the old pair.
   useEffect(() => {
@@ -731,9 +737,33 @@ export default function PriceChart({
     const rect = el.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const time = chart.timeScale().coordinateToTime(x);
+
+    if (y < 0 || y > rect.height) return null;
+
+    const timeScale = chart.timeScale();
+    const directTime = timeScale.coordinateToTime(x);
+    let time: number | null = typeof directTime === "number" ? directTime : null;
     let price: number | null = series.coordinateToPrice(y);
-    if (time == null || price == null || typeof time !== "number") return null;
+    if (price == null) return null;
+
+    // Extrapolate time into future whitespace when coordinateToTime is null (beyond latest candle)
+    if (time == null) {
+      const logical = timeScale.coordinateToLogical(x);
+      const candles = stateRef.current.candles;
+      if (logical !== null && candles.length > 0) {
+        const lastCandle = candles[candles.length - 1];
+        const lastIdx = candles.length - 1;
+        const step = candles.length >= 2
+          ? Math.max(1, lastCandle.time - candles[candles.length - 2].time)
+          : 60;
+        time = Math.round(lastCandle.time + (logical - lastIdx) * step);
+      } else {
+        return null;
+      }
+    }
+
+    if (typeof time !== "number") return null;
+
     // Magnet: place drawing anchors on the candle's nearest OHLC, matching the
     // crosshair, so a line lands exactly on a wick/body edge.
     if (stateRef.current.magnetOn) {
@@ -756,7 +786,7 @@ export default function PriceChart({
       price1: pt.price,
       time2: pt.time,
       price2: pt.price,
-      color: nextColor(),
+      color: drawMode === "ruler" ? theme.yellow : nextColor(),
     });
   };
 
@@ -772,8 +802,11 @@ export default function PriceChart({
     if (stateRef.current.magnetOn) {
       const chart = chartRef.current;
       const series = candleSeriesRef.current;
-      if (chart && series && pt.time !== undefined) {
+      const candle = candleAt(stateRef.current.candles, pt.time);
+      if (chart && series && candle) {
         chart.setCrosshairPosition(pt.price, pt.time as UTCTimestamp, series);
+      } else if (chart) {
+        chart.clearCrosshairPosition();
       }
     }
   };
@@ -787,7 +820,7 @@ export default function PriceChart({
       return;
     }
 
-    // A trend/box needs a real drag; a click with no movement is treated as a
+    // A trend/box/ruler needs a real drag; a click with no movement is treated as a
     // cancel rather than committing a degenerate shape.
     if (draft.tool !== "level") {
       const el = containerRef.current;
@@ -795,7 +828,7 @@ export default function PriceChart({
       const series = candleSeriesRef.current;
       if (el && chart && series) {
         const rect = el.getBoundingClientRect();
-        const x1 = chart.timeScale().timeToCoordinate(draft.time1 as UTCTimestamp);
+        const x1 = timeToCoordinateExtrapolated(draft.time1, chart.timeScale(), stateRef.current.candles);
         const y1 = series.priceToCoordinate(draft.price1);
         if (x1 != null && y1 != null) {
           const dx = Math.abs(e.clientX - rect.left - x1);
@@ -1079,6 +1112,18 @@ export default function PriceChart({
         </button>
 
         <button
+          onClick={() => setDrawMode((m) => (m === "ruler" ? "none" : "ruler"))}
+          className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70"
+          style={{
+            color: drawMode === "ruler" ? theme.bg : theme.dim,
+            background: drawMode === "ruler" ? theme.yellow : "transparent",
+          }}
+          title="Measure price & percentage delta across a region"
+        >
+          📐 Ruler
+        </button>
+
+        <button
           onClick={clearDrawings}
           disabled={drawings.length === 0}
           className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70 disabled:opacity-30"
@@ -1104,7 +1149,9 @@ export default function PriceChart({
               ? "Click or drag to place a level"
               : drawMode === "trend"
                 ? "Drag to draw a trend line"
-                : "Drag to draw a box"}
+                : drawMode === "rect"
+                  ? "Drag to draw a box"
+                  : "Drag to measure price & percentage delta"}
           </span>
         )}
 
@@ -1133,6 +1180,19 @@ export default function PriceChart({
           >
             📥 CSV
           </button>
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="text-[10px] px-1.5 py-0.5 rounded border hover:opacity-70 font-mono"
+              style={{
+                borderColor: isMaximized ? theme.yellow : theme.border,
+                color: isMaximized ? theme.yellow : theme.dim,
+              }}
+              title={isMaximized ? "Restore grid (Esc)" : "Maximize chart (f)"}
+            >
+              {isMaximized ? "✕ Restore" : "⤢ Max"}
+            </button>
+          )}
         </div>
       </div>
 
