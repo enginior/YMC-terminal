@@ -311,6 +311,7 @@ export default function Home() {
             candleError={candleError}
             onToggleMaximize={() => setMaximizedPanel(null)}
             isMaximized={true}
+            ticker={ticker}
           />
         );
       case "orderbook":
@@ -446,6 +447,7 @@ export default function Home() {
               timeframe={timeframe}
               onTimeframeChange={setTimeframe}
               candleError={candleError}
+              ticker={ticker}
             />
           </div>
 
@@ -586,6 +588,7 @@ export default function Home() {
               candleError={candleError}
               onToggleMaximize={() => setMaximizedPanel("chart")}
               isMaximized={false}
+              ticker={ticker}
             />
           </div>
 

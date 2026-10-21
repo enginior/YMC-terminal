@@ -14,10 +14,12 @@ import {
   HistogramData,
   Time,
   IPriceLine,
+  AutoscaleInfo,
 } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { useTheme, Theme } from "@/context/ThemeContext";
 import { sma, ema, rsi, macd, bollingerBands, stochRsi } from "@/lib/indicators";
+import { heikenAshi } from "@/lib/heikenAshi";
 import { PriceBandPrimitive } from "@/lib/bands";
 import { DayLinesPrimitive, utcDayBoundaries } from "@/lib/dayLines";
 import { DrawingsPrimitive, Drawing, DrawingTool, hitTestDrawing, deleteHandlePoint, timeToCoordinateExtrapolated } from "@/lib/drawings";
@@ -28,6 +30,24 @@ const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
 type OverlayIndicator = "sma" | "ema" | "bollinger";
 type PaneIndicator = "rsi" | "macd" | "stochrsi";
 type IndicatorType = OverlayIndicator | PaneIndicator;
+
+/** How the main price pane draws the series. */
+export type ChartType = "candles" | "heiken" | "line";
+
+const CHART_TYPE_LABELS: Record<ChartType, string> = {
+  candles: "Candles",
+  heiken: "Heikin Ashi",
+  line: "Line",
+};
+
+const CHART_TYPE_DESCRIPTIONS: Record<ChartType, string> = {
+  candles: "Standard Candlesticks (OHLC)",
+  heiken: "Smoothed Heikin Ashi trend bars",
+  line: "Continuous close price curve",
+};
+
+const CHART_TYPE_KEY = "btc-terminal:chart-type";
+const SESSION_HL_KEY = "btc-terminal:session-hl";
 
 const INDICATOR_LABELS: Record<IndicatorType, string> = {
   sma: "SMA 20/50",
@@ -107,6 +127,50 @@ interface PriceChartProps {
   candleError?: boolean;
   onToggleMaximize?: () => void;
   isMaximized?: boolean;
+  ticker?: { high?: number; low?: number } | null;
+}
+
+function ChartTypeIcon({
+  type,
+  theme,
+  size = 11,
+}: {
+  type: ChartType;
+  theme: Theme;
+  size?: number;
+}) {
+  if (type === "candles") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <line x1="5" y1="2" x2="5" y2="14" stroke={theme.green} strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="3.5" y="5" width="3" height="6" fill={theme.green} rx="0.5" />
+        <line x1="11" y1="3" x2="11" y2="15" stroke={theme.red} strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="9.5" y="4" width="3" height="7" fill={theme.red} rx="0.5" />
+      </svg>
+    );
+  }
+  if (type === "heiken") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className="shrink-0">
+        <line x1="5" y1="3" x2="5" y2="13" stroke={theme.green} strokeWidth="1.2" strokeLinecap="round" />
+        <rect x="3.5" y="4" width="3" height="7" fill={theme.green} rx="0.5" />
+        <line x1="11" y1="2" x2="11" y2="12" stroke={theme.green} strokeWidth="1.2" strokeLinecap="round" />
+        <rect x="9.5" y="3" width="3" height="7" fill={theme.green} rx="0.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className="shrink-0">
+      <path
+        d="M2 12L6 8L10 10L14 4"
+        stroke={theme.blue}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="14" cy="4" r="1.5" fill={theme.blue} />
+    </svg>
+  );
 }
 
 export default function PriceChart({
@@ -117,14 +181,21 @@ export default function PriceChart({
   candleError = false,
   onToggleMaximize,
   isMaximized = false,
+  ticker,
 }: PriceChartProps) {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  // A line series lives alongside candleSeries so switching visuals never recreates the chart.
+  const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   const [activeIndicators, setActiveIndicators] = useState<Set<IndicatorType>>(new Set());
+  const [chartType, setChartType] = useState<ChartType>("candles");
+  const [chartTypeMenuOpen, setChartTypeMenuOpen] = useState(false);
+  const skipChartTypeSaveRef = useRef(true);
+  const skipSessionHLSaveRef = useRef(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
   const [showDayLines, setShowDayLines] = useState(true);
@@ -140,6 +211,21 @@ export default function PriceChart({
   const [chartEpoch, setChartEpoch] = useState(0);
 
   const drawings = drawingsBySymbol[symbol] ?? [];
+
+  // Candles formatted for visual rendering (Heikin Ashi if selected)
+  const chartCandles = useMemo(
+    () => (chartType === "heiken" ? heikenAshi(candles) : candles),
+    [candles, chartType]
+  );
+
+  // Candles for magnet snapping: snaps to close in line mode, or OHLC of display candles
+  const snapCandles = useMemo(
+    () =>
+      chartType === "line"
+        ? candles.map((c) => ({ ...c, open: c.close, high: c.close, low: c.close }))
+        : chartCandles,
+    [candles, chartCandles, chartType]
+  );
 
   // Series created for indicators, torn down and rebuilt when the set changes.
   // Typed loosely because lightweight-charts requires per-series-type generics.
@@ -163,8 +249,50 @@ export default function PriceChart({
   const lastSnapRef = useRef<{ time: number; price: number } | null>(null);
 
   // Refs so the chart's event handlers never close over stale state
-  const stateRef = useRef({ drawMode, drawings, candles, theme, symbol, magnetOn });
-  stateRef.current = { drawMode, drawings, candles, theme, symbol, magnetOn };
+  const stateRef = useRef({ drawMode, drawings, candles, snapCandles, theme, symbol, magnetOn, chartType });
+  stateRef.current = { drawMode, drawings, candles, snapCandles, theme, symbol, magnetOn, chartType };
+
+  // Load persisted chart visual type
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHART_TYPE_KEY) as ChartType | null;
+      if (saved && (saved === "candles" || saved === "heiken" || saved === "line")) {
+        setChartType(saved);
+      }
+    } catch {}
+  }, []);
+
+  // Persist chart visual type
+  useEffect(() => {
+    if (skipChartTypeSaveRef.current) {
+      skipChartTypeSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(CHART_TYPE_KEY, chartType);
+    } catch {}
+  }, [chartType]);
+
+  // Load persisted session High/Low toggle
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SESSION_HL_KEY);
+      if (saved !== null) {
+        setShowSessionHL(saved === "true");
+      }
+    } catch {}
+  }, []);
+
+  // Persist session High/Low toggle
+  useEffect(() => {
+    if (skipSessionHLSaveRef.current) {
+      skipSessionHLSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(SESSION_HL_KEY, String(showSessionHL));
+    } catch {}
+  }, [showSessionHL]);
 
   // Delete one drawing. Reads the symbol from the state ref so the handler stays
   // stable across symbol switches.
@@ -250,6 +378,8 @@ export default function PriceChart({
       borderDownColor: theme.downCandle,
       wickUpColor: theme.wickUp,
       wickDownColor: theme.wickDown,
+      autoscaleInfoProvider: (base: () => AutoscaleInfo | null) =>
+        stateRef.current.chartType === "line" ? null : base(),
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -258,9 +388,19 @@ export default function PriceChart({
     });
     chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
+    // The line chart shares the main price scale and is toggled visible when active.
+    const lineSeries = chart.addSeries(LineSeries, {
+      color: theme.blue,
+      lineWidth: 2,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      visible: false,
+    });
+
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
+    lineSeriesRef.current = lineSeries;
 
     const dayLines = new DayLinesPrimitive();
     candleSeries.attachPrimitive(dayLines);
@@ -298,14 +438,15 @@ export default function PriceChart({
       // setCrosshairPosition re-fires this handler, so lastSnapRef stops the loop
       // once the snapped price is unchanged.
       if (stateRef.current.magnetOn && mainPane && param.point && typeof param.time === "number") {
-        const price = candleSeries.coordinateToPrice(param.point.y);
-        const candle = candleAt(stateRef.current.candles, param.time);
+        const activeSeries = stateRef.current.chartType === "line" ? (lineSeriesRef.current ?? candleSeries) : candleSeries;
+        const price = activeSeries.coordinateToPrice(param.point.y);
+        const candle = candleAt(stateRef.current.snapCandles, param.time);
         if (price != null && candle) {
           const snapped = snapPriceToOhlc(candle, price);
           const last = lastSnapRef.current;
           if (!last || last.time !== param.time || last.price !== snapped) {
             lastSnapRef.current = { time: param.time, price: snapped };
-            chart.setCrosshairPosition(snapped, param.time, candleSeries);
+            chart.setCrosshairPosition(snapped, param.time, activeSeries);
           }
         }
       }
@@ -379,6 +520,7 @@ export default function PriceChart({
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      lineSeriesRef.current = null;
       dayLinesRef.current = null;
       drawingsPrimRef.current = null;
       sessionLinesRef.current = [];
@@ -406,19 +548,38 @@ export default function PriceChart({
     if (!candleSeriesRef.current || candles.length === 0) return;
 
     try {
-      candleSeriesRef.current.setData(
-        candles.map((c) => ({
-          time: c.time as UTCTimestamp,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        }))
-      );
+      if (chartType === "line") {
+        candleSeriesRef.current.setData(
+          candles.map((c) => ({
+            time: c.time as UTCTimestamp,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          }))
+        );
+        lineSeriesRef.current?.setData(
+          candles.map((c) => ({
+            time: c.time as UTCTimestamp,
+            value: c.close,
+          }))
+        );
+      } else {
+        candleSeriesRef.current.setData(
+          chartCandles.map((c) => ({
+            time: c.time as UTCTimestamp,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          }))
+        );
+        lineSeriesRef.current?.setData([]);
+      }
 
       if (volumeSeriesRef.current) {
         volumeSeriesRef.current.setData(
-          candles.map(
+          chartCandles.map(
             (c): HistogramData => ({
               time: c.time as UTCTimestamp,
               value: c.volume || 0,
@@ -442,7 +603,50 @@ export default function PriceChart({
     } catch {
       /* series disposed during a theme swap — next effect run repairs it */
     }
-  }, [candles, theme]);
+  }, [candles, chartCandles, chartType, theme]);
+
+  // Toggle line series visibility in line mode
+  useEffect(() => {
+    try {
+      lineSeriesRef.current?.applyOptions({ visible: chartType === "line" });
+    } catch {}
+  }, [chartType, theme]);
+
+  // In line mode, candles are painted transparent so attached primitives (day lines, drawings)
+  // continue to render without wicks or bodies interfering with the line
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
+    try {
+      if (chartType === "line") {
+        series.applyOptions({
+          upColor: "rgba(0,0,0,0)",
+          downColor: "rgba(0,0,0,0)",
+          borderUpColor: "rgba(0,0,0,0)",
+          borderDownColor: "rgba(0,0,0,0)",
+          wickUpColor: "rgba(0,0,0,0)",
+          wickDownColor: "rgba(0,0,0,0)",
+          borderVisible: false,
+          wickVisible: false,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+      } else {
+        series.applyOptions({
+          upColor: theme.upCandle,
+          downColor: theme.downCandle,
+          borderUpColor: theme.upCandle,
+          borderDownColor: theme.downCandle,
+          wickUpColor: theme.wickUp,
+          wickDownColor: theme.wickDown,
+          borderVisible: true,
+          wickVisible: true,
+          lastValueVisible: true,
+          priceLineVisible: true,
+        });
+      }
+    } catch {}
+  }, [chartType, theme]);
 
   useEffect(() => {
     try {
@@ -462,51 +666,122 @@ export default function PriceChart({
     );
   }, [candles, showDayLines, theme]);
 
-  // 24H Session High / Low watermark lines
+  // 24H & Previous Day High / Low watermark lines
   useEffect(() => {
-    const series = candleSeriesRef.current;
-    if (!series) return;
+    const targetSeries =
+      chartType === "line"
+        ? (lineSeriesRef.current ?? candleSeriesRef.current)
+        : candleSeriesRef.current;
+    if (!targetSeries) return;
 
     sessionLinesRef.current.forEach((l) => {
       try {
-        series.removePriceLine(l);
+        candleSeriesRef.current?.removePriceLine(l);
+        lineSeriesRef.current?.removePriceLine(l);
       } catch {}
     });
     sessionLinesRef.current = [];
 
     if (!showSessionHL || candles.length === 0) return;
 
-    let hi = -Infinity;
-    let lo = Infinity;
-    for (const c of candles) {
-      if (c.high > hi) hi = c.high;
-      if (c.low < lo) lo = c.low;
+    const lastCandle = candles[candles.length - 1];
+    const cutoff24 = lastCandle.time - 86400;
+    const candles24h = candles.filter((c) => c.time >= cutoff24);
+
+    // Current 24H High & Low (from ticker if available, else windowed from last 24h of candles)
+    let hi24: number | null = null;
+    let lo24: number | null = null;
+
+    if (ticker && Number.isFinite(ticker.high) && Number.isFinite(ticker.low) && ticker.high! > 0 && ticker.low! > 0) {
+      hi24 = ticker.high!;
+      lo24 = ticker.low!;
+    } else if (candles24h.length > 0) {
+      hi24 = Math.max(...candles24h.map((c) => c.high));
+      lo24 = Math.min(...candles24h.map((c) => c.low));
+    } else {
+      hi24 = lastCandle.high;
+      lo24 = lastCandle.low;
     }
 
-    if (!Number.isFinite(hi) || !Number.isFinite(lo)) return;
+    // Previous Day High & Low (PDH / PDL: previous UTC session or previous 24h-48h window)
+    const todayStart = Math.floor(lastCandle.time / 86400) * 86400;
+    const prevDayStart = todayStart - 86400;
+    let prevCandles = candles.filter((c) => c.time >= prevDayStart && c.time < todayStart);
+    if (prevCandles.length === 0) {
+      prevCandles = candles.filter((c) => c.time >= lastCandle.time - 172800 && c.time < cutoff24);
+    }
 
-    const highLine = series.createPriceLine({
-      price: hi,
-      color: theme.green,
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lineVisible: true,
-      axisLabelVisible: true,
-      title: "24H HI",
-    });
+    let prevHi: number | null = null;
+    let prevLo: number | null = null;
+    if (prevCandles.length > 0) {
+      prevHi = Math.max(...prevCandles.map((c) => c.high));
+      prevLo = Math.min(...prevCandles.map((c) => c.low));
+    }
 
-    const lowLine = series.createPriceLine({
-      price: lo,
-      color: theme.red,
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      lineVisible: true,
-      axisLabelVisible: true,
-      title: "24H LO",
-    });
+    const lines: IPriceLine[] = [];
 
-    sessionLinesRef.current = [highLine, lowLine];
-  }, [candles, showSessionHL, theme]);
+    if (hi24 != null && Number.isFinite(hi24)) {
+      lines.push(
+        targetSeries.createPriceLine({
+          price: hi24,
+          color: theme.green,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          lineVisible: true,
+          axisLabelVisible: true,
+          title: "24H HI",
+        })
+      );
+    }
+
+    if (lo24 != null && Number.isFinite(lo24)) {
+      lines.push(
+        targetSeries.createPriceLine({
+          price: lo24,
+          color: theme.red,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          lineVisible: true,
+          axisLabelVisible: true,
+          title: "24H LO",
+        })
+      );
+    }
+
+    if (prevHi != null && Number.isFinite(prevHi)) {
+      lines.push(
+        targetSeries.createPriceLine({
+          price: prevHi,
+          color: "#38BDF8",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          lineVisible: true,
+          axisLabelVisible: true,
+          title: "PREV HI",
+        })
+      );
+    }
+
+    if (prevLo != null && Number.isFinite(prevLo)) {
+      lines.push(
+        targetSeries.createPriceLine({
+          price: prevLo,
+          color: "#F59E0B",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          lineVisible: true,
+          axisLabelVisible: true,
+          title: "PREV LO",
+        })
+      );
+    }
+
+    sessionLinesRef.current = lines;
+
+    try {
+      chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+    } catch {}
+  }, [candles, showSessionHL, theme, chartType, ticker]);
 
   /* ---------------- indicators ---------------- */
 
@@ -749,9 +1024,9 @@ export default function PriceChart({
     if (!prim) return;
     prim.setStyle({ labelBg: theme.panel });
     prim.setDrawings(drawings);
-    prim.setCandles(candles);
+    prim.setCandles(snapCandles);
     prim.setInteraction(hoveredRef.current, selectedRef.current);
-  }, [drawings, theme, candles]);
+  }, [drawings, theme, snapCandles]);
 
   // Drop any selection when the symbol changes — it belongs to the old pair.
   useEffect(() => {
@@ -817,7 +1092,7 @@ export default function PriceChart({
     // Magnet: place drawing anchors on the candle's nearest OHLC, matching the
     // crosshair, so a line lands exactly on a wick/body edge.
     if (stateRef.current.magnetOn) {
-      const candle = candleAt(stateRef.current.candles, time);
+      const candle = candleAt(stateRef.current.snapCandles, time);
       if (candle) price = snapPriceToOhlc(candle, price);
     }
     return { time, price };
@@ -852,9 +1127,10 @@ export default function PriceChart({
     if (stateRef.current.magnetOn) {
       const chart = chartRef.current;
       const series = candleSeriesRef.current;
-      const candle = candleAt(stateRef.current.candles, pt.time);
+      const candle = candleAt(stateRef.current.snapCandles, pt.time);
       if (chart && series && candle) {
-        chart.setCrosshairPosition(pt.price, pt.time as UTCTimestamp, series);
+        const source = stateRef.current.chartType === "line" ? (lineSeriesRef.current ?? series) : series;
+        chart.setCrosshairPosition(pt.price, pt.time as UTCTimestamp, source);
       } else if (chart) {
         chart.clearCrosshairPosition();
       }
@@ -1035,6 +1311,70 @@ export default function PriceChart({
 
         <span className="ml-2" style={{ color: theme.dim }}>|</span>
 
+        {/* Chart Visuals Dropdown (Candles, Heikin Ashi, Line) */}
+        <div className="relative">
+          <button
+            onClick={() => setChartTypeMenuOpen((v) => !v)}
+            onBlur={() => setTimeout(() => setChartTypeMenuOpen(false), 150)}
+            className="text-[10px] px-2 py-0.5 rounded border hover:opacity-80 flex items-center gap-1.5 font-medium transition-colors"
+            style={{
+              borderColor: chartTypeMenuOpen ? theme.yellow : theme.border,
+              background: chartType !== "candles" ? `${theme.yellow}15` : "transparent",
+              color: chartType !== "candles" ? theme.yellow : theme.text,
+            }}
+            title="Chart Style: Candlesticks, Heikin Ashi, Line"
+          >
+            <ChartTypeIcon type={chartType} theme={theme} size={11} />
+            <span>{CHART_TYPE_LABELS[chartType]}</span>
+            <span className="text-[8px] opacity-70">▾</span>
+          </button>
+
+          {chartTypeMenuOpen && (
+            <div
+              className="absolute top-full left-0 mt-1 rounded border p-1 z-30 min-w-[150px] shadow-xl"
+              style={{ background: theme.panel, borderColor: theme.border }}
+            >
+              <div className="text-[8px] uppercase tracking-wider px-2 py-1 font-semibold" style={{ color: theme.dim }}>
+                Chart Visuals
+              </div>
+              {(["candles", "heiken", "line"] as ChartType[]).map((type) => {
+                const isSelected = chartType === type;
+                return (
+                  <button
+                    key={type}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setChartType(type);
+                      setChartTypeMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[11px] text-left hover:opacity-80 transition-colors"
+                    style={{
+                      background: isSelected ? `${theme.yellow}20` : "transparent",
+                      color: isSelected ? theme.yellow : theme.text,
+                    }}
+                    title={CHART_TYPE_DESCRIPTIONS[type]}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ChartTypeIcon type={type} theme={theme} size={12} />
+                      <div className="flex flex-col">
+                        <span>{CHART_TYPE_LABELS[type]}</span>
+                        <span className="text-[8px] opacity-60 font-normal">
+                          {type === "candles" ? "Standard OHLC" : type === "heiken" ? "Averaged trend" : "Close curve"}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="text-[10px] font-bold" style={{ color: theme.yellow }}>
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <button
           onClick={() => setShowVolume((v) => !v)}
           className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70"
@@ -1055,8 +1395,11 @@ export default function PriceChart({
         <button
           onClick={() => setShowSessionHL((v) => !v)}
           className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-70"
-          style={{ color: showSessionHL ? theme.yellow : theme.dim }}
-          title="Toggle 24H Session High / Low price watermark lines"
+          style={{
+            color: showSessionHL ? theme.yellow : theme.dim,
+            background: showSessionHL ? `${theme.yellow}22` : "transparent",
+          }}
+          title="Toggle 24H & Previous Day High / Low price watermark lines"
         >
           H/L
         </button>

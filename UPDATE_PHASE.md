@@ -30,7 +30,8 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 | **Asset Logos** | Vector Coin & Metallic Bullion / Commodity Badges | Medium | Low | **P2** | ✅ Completed |
 | **Derivatives**| Basis Spread (Mark vs. Spot Spread) in MarketStats | Medium | Low | **P2** | ✅ Completed |
 | **Charting** | Broker-style Broken Day Lines (between candles) | Medium | Low | **P2** | ✅ Completed |
-| **Charting** | 24H Session High / Low Price Watermark Lines (`H/L`) | Medium | Low | **P2** | ✅ Completed |
+| **Charting** | 24H & Previous Day High / Low Watermarks (`H/L`) | Medium | Low | **P3** | ✅ Completed |
+| **Charting** | Chart Visuals Dropdown (Candles, Heikin Ashi, Line) | High | Medium | **P3** | ✅ Completed |
 | **UI/UX** | Reset Default Bloomberg Layout in Settings | Low | Low | **P2** | ✅ Completed |
 | **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P3** | Planned |
 | **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P3** | Planned |
@@ -126,8 +127,8 @@ As a perpetual derivatives workstation, YMC Terminal requires specialized deriva
    - **CSV Download:** Export loaded candles as standard CSV format:
      `Timestamp,Date,Open,High,Low,Close,Volume`
 
-3. **Session High / Low Watermarks**
-   - Display subtle horizontal dotted lines representing Session High (24h High) and Session Low (24h Low) with price tag badges on the right scale.
+3. **Session & Previous Day High / Low Watermarks**
+   - Display horizontal watermark key levels representing 24H High (Green dashed), 24H Low (Red dashed), Previous Day High (Cyan dotted), and Previous Day Low (Amber dotted) with right-scale price badges and auto-fit scaling.
 
 ---
 

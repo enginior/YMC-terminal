@@ -19,11 +19,37 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
-    version: "v0.1.3",
-    badge: "Latest Release · Phase 3",
-    tagline: "Precious Metals & Commodities, Vector Asset Logos, and Broker-Style Day Lines",
+    version: "v0.1.4",
+    badge: "Latest Release · Phase 3 Polish",
+    tagline: "Chart Visuals Dropdown (Candles, Heikin Ashi, Line) & 24H / Prev Session High-Low Key Levels",
     date: "Current",
     isLatest: true,
+    categories: [
+      {
+        name: "Advanced Chart Visual Styles",
+        items: [
+          "Chart Visuals Dropdown: Instant toggle between Candlesticks, smoothed Heikin Ashi trend bars, and continuous Line chart with custom vector icons.",
+          "Mathematical Heikin Ashi computation (lib/heikenAshi.ts) filtering market noise and emphasizing prevailing trend direction.",
+          "Seamless zero-flicker transitions that maintain technical drawings, sub-pane indicators, and day separators intact without recreating the chart canvas.",
+          "Local persistence across sessions via localStorage (btc-terminal:chart-type).",
+        ],
+      },
+      {
+        name: "Multi-Session Watermark Key Levels (H/L)",
+        items: [
+          "Multi-session price watermarks: 24H Rolling High (Green dashed), 24H Rolling Low (Red dashed), Previous Day High (PDH - Cyan dotted), and Previous Day Low (PDL - Amber dotted).",
+          "Windowed precision: anchored to live 24H exchange stats and yesterday's UTC 00:00–23:59 session, eliminating historical candle scale distortion.",
+          "Dynamic price scale auto-fit: activating H/L automatically adjusts the right price scale to bring all active session levels cleanly into view.",
+          "Toggle state persisted to localStorage (btc-terminal:session-hl) with active visual feedback.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.1.3",
+    badge: "Phase 3 Release",
+    tagline: "Precious Metals & Commodities, Vector Asset Logos, and Broker-Style Day Lines",
+    date: "Prior",
     categories: [
       {
         name: "Precious Metals & Commodities Universe",
@@ -41,18 +67,12 @@ const RELEASES: ReleaseUpdate[] = [
         ],
       },
       {
-        name: "Broker-Style Broken Day Separator Lines",
+        name: "Broker-Style Day Lines & UI Enhancements",
         items: [
           "Re-engineered UTC day boundary lines to render strictly in between the last candle of the previous day and the first candle of the new day.",
           "Broken/dashed line styling matching professional broker chart layouts, preventing vertical lines from ever slicing through candle bodies.",
-        ],
-      },
-      {
-        name: "Derivatives Analytics & Market Feeds",
-        items: [
           "Global Long/Short Account Sentiment Ratio displaying real-time net long % vs. net short % trader positioning.",
           "Mark Price vs. Spot Price Basis Spread metric in MarketStats.",
-          "24H Session High / Low dashed watermark price lines with right-scale badges (H/L toolbar toggle).",
           "Watchlist 1-click sorting: 24h Change % (Top Gainers/Losers), 24h Notional Volume, and Alphabetical.",
           "One-click 'Reset Layout' action in Settings to restore the default 12-column Bloomberg grid.",
         ],
@@ -153,7 +173,7 @@ export default function AboutPage() {
             className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
             style={{ borderColor: theme.border, color: theme.dim }}
           >
-            v0.1.3
+            v0.1.4
           </span>
         </div>
         <span className="text-[10px] uppercase tracking-wider" style={{ color: theme.dim }}>
@@ -177,7 +197,7 @@ export default function AboutPage() {
                 className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded"
                 style={{ background: `${theme.green}25`, color: theme.green }}
               >
-                Production Release v0.1.3
+                Production Release v0.1.4
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl tracking-wide font-bold" style={{ color: theme.text }}>
@@ -253,7 +273,7 @@ export default function AboutPage() {
                   className="text-xs px-3 py-1 rounded border hover:opacity-80 transition-opacity font-mono"
                   style={{ borderColor: theme.border, color: theme.dim }}
                 >
-                  {showOlderReleases ? "▲ Collapse Prior Versions" : "▼ View Prior Versions (v0.1.2, v0.1.1)"}
+                  {showOlderReleases ? "▲ Collapse Prior Versions" : "▼ View Prior Versions (v0.1.3, v0.1.2, v0.1.1)"}
                 </button>
               </div>
             </div>
@@ -312,7 +332,7 @@ export default function AboutPage() {
           >
             <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs">YMC Terminal v0.1.3</span>
+              <span className="font-mono text-xs">YMC Terminal v0.1.4</span>
               <a
                 href={REPO_URL}
                 target="_blank"
