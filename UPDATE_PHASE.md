@@ -31,10 +31,12 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 | **Derivatives**| Basis Spread (Mark vs. Spot Spread) in MarketStats | Medium | Low | **P2** | ✅ Completed |
 | **Charting** | Broker-style Broken Day Lines (between candles) | Medium | Low | **P2** | ✅ Completed |
 | **Charting** | 24H & Previous Day High / Low Watermarks (`H/L`) | Medium | Low | **P3** | ✅ Completed |
-| **Charting** | Chart Visuals Dropdown (Candles, Heikin Ashi, Line) | High | Medium | **P3** | ✅ Completed |
+| **Charting** | Chart Visuals Dropdown (Candles, Heikin Ashi, Line) | High | Medium | **P3** | ✅ Completed (`c43dfdb`) |
 | **UI/UX** | Reset Default Bloomberg Layout in Settings | Low | Low | **P2** | ✅ Completed |
-| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P3** | Planned |
-| **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P3** | Planned |
+| **Watchlist** | Consolidate Watchlist + Sparklines (Merge Comparison) | High | Medium | **P4** | 📋 Planned |
+| **Heatmap** | Crypto Market Treemap / Heatmap Widget (below News) | High | Medium | **P4** | 📋 Planned |
+| **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P4** | Planned |
+| **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P4** | Planned |
 
 ---
 
@@ -169,6 +171,49 @@ As a perpetual derivatives workstation, YMC Terminal requires specialized deriva
 
 ---
 
+### 3.6 Consolidated Watchlist with Inline Sparklines
+
+1. **Rationale & Information Density**
+   - Currently, `Watchlist` displays asset rows with live prices, 24h change %, and notional volume, while `ComparisonPanel` displays a separate list of 24h sparklines.
+   - Consolidating sparklines directly into each row of `Watchlist` avoids redundant polling, enhances Bloomberg-style density, and frees up a major grid panel slot.
+
+2. **UI & Data Specification**
+   - **Inline Mini-Curve:** Embed a lightweight SVG sparkline (64px–80px wide × 18px–20px high) between the symbol badge and the price / % change column in each row.
+   - **Color Coding:** Inherit theme-driven semantic colors (`theme.green` for positive 24h trajectory, `theme.red` for negative trajectory).
+   - **Preserved Capabilities:** Retain all existing Watchlist features:
+     - Vector asset logos (SVG coins, 3D metallic ingots, oil drum)
+     - Live streaming prices and 24h % deltas
+     - 24h Quote volume in compact notation ($B, $M, $K)
+     - 1-click sorting (Gainers, Losers, Volume, Alphabetical)
+     - Keyboard navigation (`1`–`9`, `0`) and quick selection
+
+---
+
+### 3.7 Crypto Market Treemap / Heatmap Status Widget (Coin360 / Finviz Style)
+
+1. **Rationale & Placement**
+   - Visual market map inspired by the Bloomberg/Finviz S&P 500 and Coin360 market heatmaps.
+   - Positioned directly below the High Impact News / Macro section (or occupying the retired Comparison panel slot in the multi-panel grid).
+
+2. **Treemap & Visual Hierarchy**
+   - **Proportional Area Sizing:** Tiles sized dynamically by 24h notional volume (or relative market weight) using a squarified treemap layout.
+     - Dominant mega-cap blocks (BTC, ETH, SOL) anchor the primary quadrant.
+     - Mid-caps and commodities (BNB, DOGE, XRP, SUI, AVAX, LINK, XAU, XAG, OIL) scale responsively.
+   - **Tile Anatomy:**
+     - High-definition vector asset logo badge
+     - Bold uppercase symbol name (e.g., `BTC`, `ETH`, `SOL`, `NVDA`-style layout)
+     - 24h % change formatted as `+X.XX%` / `-X.XX%`
+   - **Color Heatmap Gradient:**
+     - Bullish: Deep green (`#16A34A` / `#22C55E`) for `> +3%`, muted green for `0% to +3%`.
+     - Neutral: Subdued panel slate for flat movements (`~0%`).
+     - Bearish: High-contrast red (`#DC2626` / `#EF4444`) scaling with downside intensity (`-3%` to `-10%+`).
+
+3. **Interactivity & Integration**
+   - **1-Click Terminal Sync:** Clicking any tile immediately switches the active symbol across the entire terminal (Chart, Order Book, Trade Tape, Market Stats, Sentiment).
+   - **Hover Inspection:** Tooltip displaying 24h high, 24h low, notional volume, and funding rate on pointer hover.
+
+---
+
 ## 4. Implementation Phasing Roadmap
 
 ```mermaid
@@ -186,12 +231,14 @@ flowchart TD
     subgraph Phase 3: Terminal UI/UX Polish
         C1["Panel Maximize / Fullscreen"] --> C2["CommandBar Action Parser"]
         C2 --> C3["Chart Delta Ruler Tool"]
-        C3 --> C4["Expanded Universe & Watchlist Sort"]
+        C3 --> C4["Expanded Universe & Asset Badges"]
+        C4 --> C5["Chart Visuals & Session H/L Lines"]
     end
 
-    subgraph Phase 4: Performance & Profiles
-        D1["Price Store Render Isolation"] --> D2["Multi-Layout Profiles"]
-        D2 --> D3["News & Calendar Tag Filtering"]
+    subgraph Phase 4: Market Heatmap & Watchlist Consolidation
+        D1["Consolidate Watchlist + Sparklines"] --> D2["Crypto Market Treemap Widget"]
+        D2 --> D3["Price Store Render Isolation"]
+        D3 --> D4["News & Calendar Tag Filtering"]
     end
 
     Phase 1 --> Phase 2 --> Phase 3 --> Phase 4
