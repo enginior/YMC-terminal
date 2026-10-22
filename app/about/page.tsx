@@ -19,11 +19,36 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
-    version: "v0.1.4",
-    badge: "Latest Release · Phase 3 Polish",
-    tagline: "Chart Visuals Dropdown (Candles, Heikin Ashi, Line) & 24H / Prev Session High-Low Key Levels",
+    version: "v0.1.5",
+    badge: "Latest Release · Phase 4",
+    tagline: "Crypto Market Treemap Heatmap & Consolidated Sparkline Watchlist",
     date: "Current",
     isLatest: true,
+    categories: [
+      {
+        name: "Crypto Market Treemap Status Widget",
+        items: [
+          "Institutional S&P 500 / Finviz / Coin360 style squarified treemap layout positioned directly below the High Impact Macro section.",
+          "Dynamic volume-weighted tile sizing scaling proportionally with 24h market activity across all 12 tracked assets.",
+          "High-contrast color heatmaps: deep crimson gradients for pullbacks, vibrant emerald gradients for market rallies, and neutral slate for flat sessions.",
+          "Full tile telemetry: asset logo badge, uppercase symbol name, 24h % delta, live price, and 1-click terminal-wide chart synchronization.",
+        ],
+      },
+      {
+        name: "Consolidated Sparkline Watchlist",
+        items: [
+          "Embedded 24h mini SVG trendline curves directly into every Watchlist row, matching directional color coding without redundant polling.",
+          "Unified information density: preserves live prices, notional 24h volume, sort controls (Gainers, Losers, Volume, A-Z), and instant symbol selection.",
+          "Retires redundant standalone comparison panel to maximize terminal workspace efficiency.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.1.4",
+    badge: "Phase 3 Polish",
+    tagline: "Chart Visuals Dropdown (Candles, Heikin Ashi, Line) & 24H / Prev Session High-Low Key Levels",
+    date: "Prior",
     categories: [
       {
         name: "Advanced Chart Visual Styles",
@@ -173,7 +198,7 @@ export default function AboutPage() {
             className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
             style={{ borderColor: theme.border, color: theme.dim }}
           >
-            v0.1.4
+            v0.1.5
           </span>
         </div>
         <span className="text-[10px] uppercase tracking-wider" style={{ color: theme.dim }}>
@@ -197,7 +222,7 @@ export default function AboutPage() {
                 className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded"
                 style={{ background: `${theme.green}25`, color: theme.green }}
               >
-                Production Release v0.1.4
+                Production Release v0.1.5
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl tracking-wide font-bold" style={{ color: theme.text }}>
@@ -273,7 +298,7 @@ export default function AboutPage() {
                   className="text-xs px-3 py-1 rounded border hover:opacity-80 transition-opacity font-mono"
                   style={{ borderColor: theme.border, color: theme.dim }}
                 >
-                  {showOlderReleases ? "▲ Collapse Prior Versions" : "▼ View Prior Versions (v0.1.3, v0.1.2, v0.1.1)"}
+                  {showOlderReleases ? "▲ Collapse Prior Versions" : "▼ View Prior Versions (v0.1.4, v0.1.3, v0.1.2, v0.1.1)"}
                 </button>
               </div>
             </div>
@@ -332,7 +357,7 @@ export default function AboutPage() {
           >
             <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs">YMC Terminal v0.1.4</span>
+              <span className="font-mono text-xs">YMC Terminal v0.1.5</span>
               <a
                 href={REPO_URL}
                 target="_blank"

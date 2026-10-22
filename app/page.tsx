@@ -12,6 +12,7 @@ import AlertsPanel from "@/components/AlertsPanel";
 import AlertNotification from "@/components/AlertNotification";
 import ExchangePanel from "@/components/ExchangePanel";
 import ComparisonPanel from "@/components/ComparisonPanel";
+import MarketHeatmapPanel from "@/components/MarketHeatmapPanel";
 import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
 import CorrelationPanel from "@/components/CorrelationPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
@@ -347,8 +348,9 @@ export default function Home() {
         return <NewsFeedPanel />;
       case "calendar":
         return <EconomicCalendarPanel />;
+      case "heatmap":
       case "comparison":
-        return <ComparisonPanel />;
+        return <MarketHeatmapPanel onSelect={setSelectedSymbol} selected={selectedSymbol} />;
       case "watchlist":
         return <Watchlist selected={selectedSymbol} onSelect={setSelectedSymbol} />;
       default:
@@ -480,7 +482,7 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
-            <ComparisonPanel />
+            <MarketHeatmapPanel onSelect={setSelectedSymbol} selected={selectedSymbol} />
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
@@ -551,7 +553,7 @@ export default function Home() {
           className="flex-1 grid grid-cols-12 gap-px p-px overflow-hidden min-h-0"
           style={{ background: theme.border, gridTemplateRows: "auto minmax(0, 1fr)" }}
         >
-          {/* Left rail: watchlist over a permanent full-height comparison panel */}
+          {/* Left rail: watchlist over economic calendar over market heatmap */}
           <div
             className="col-span-2 overflow-hidden flex flex-col min-h-0"
             style={{ background: theme.panel, gridRow: "1 / -1" }}
@@ -565,7 +567,7 @@ export default function Home() {
             </div>
             <div className="h-px shrink-0" style={{ background: theme.border }} />
             <div className="flex-1 min-h-0 overflow-hidden">
-              <ComparisonPanel />
+              <MarketHeatmapPanel onSelect={setSelectedSymbol} selected={selectedSymbol} />
             </div>
           </div>
 

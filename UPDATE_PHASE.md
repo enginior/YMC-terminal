@@ -33,8 +33,8 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 | **Charting** | 24H & Previous Day High / Low Watermarks (`H/L`) | Medium | Low | **P3** | ✅ Completed |
 | **Charting** | Chart Visuals Dropdown (Candles, Heikin Ashi, Line) | High | Medium | **P3** | ✅ Completed (`c43dfdb`) |
 | **UI/UX** | Reset Default Bloomberg Layout in Settings | Low | Low | **P2** | ✅ Completed |
-| **Watchlist** | Consolidate Watchlist + Sparklines (Merge Comparison) | High | Medium | **P4** | 📋 Planned |
-| **Heatmap** | Crypto Market Treemap / Heatmap Widget (below News) | High | Medium | **P4** | 📋 Planned |
+| **Watchlist** | Consolidate Watchlist + Sparklines (Merge Comparison) | High | Medium | **P4** | ✅ Completed |
+| **Heatmap** | Crypto Market Treemap / Heatmap Widget (below News) | High | Medium | **P4** | ✅ Completed |
 | **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P4** | Planned |
 | **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P4** | Planned |
 

@@ -37,6 +37,7 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
             changePercent: i.changePercent,
             volume: i.volume,
             rawVolume: i.rawVolume,
+            sparkline: Array.isArray(i.sparkline) ? i.sparkline : [],
           }))
         );
         setFailed(false);
@@ -115,6 +116,10 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
           const up = item.changePercent >= 0;
           const selectable = Boolean(onSelect) && isChartable(item.symbol);
           const isSelected = selected === item.symbol;
+          const pts = (item.sparkline ?? []).filter((n) => Number.isFinite(n));
+          const min = pts.length ? Math.min(...pts) : 0;
+          const max = pts.length ? Math.max(...pts) : 1;
+          const range = max - min || 1;
 
           return (
             <div
@@ -150,7 +155,7 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
                   </span>
                 </div>
                 <span
-                  className="text-[11px] tabular-nums shrink-0"
+                  className="text-[11px] tabular-nums shrink-0 font-medium"
                   style={{ color: item.price > 0 ? theme.text : theme.dim }}
                 >
                   {item.price > 0
@@ -158,12 +163,40 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
                     : "—"}
                 </span>
               </div>
-              <div className="flex justify-between items-baseline gap-2 mt-0.5">
-                <span className="text-[9px]" style={{ color: theme.dim }}>
+              <div className="flex items-center justify-between gap-1.5 mt-1">
+                <span className="text-[9px] shrink-0 font-mono" style={{ color: theme.dim }}>
                   Vol {item.volume}
                 </span>
+                <div className="flex-1 h-3.5 max-w-[65px] min-w-[36px] mx-1">
+                  {pts.length > 1 && (
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox="0 0 100 20"
+                      preserveAspectRatio="none"
+                      role="img"
+                      className="overflow-visible"
+                    >
+                      <polyline
+                        fill="none"
+                        stroke={up ? theme.green : theme.red}
+                        strokeWidth="1.6"
+                        vectorEffect="non-scaling-stroke"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={pts
+                          .map((p, i) => {
+                            const x = (i / (pts.length - 1)) * 100;
+                            const y = 19 - ((p - min) / range) * 18;
+                            return `${x.toFixed(2)},${y.toFixed(2)}`;
+                          })
+                          .join(" ")}
+                      />
+                    </svg>
+                  )}
+                </div>
                 <span
-                  className="text-[10px] tabular-nums"
+                  className="text-[10px] tabular-nums shrink-0 font-medium"
                   style={{ color: up ? theme.green : theme.red }}
                 >
                   {up ? "+" : ""}
