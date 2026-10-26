@@ -11,7 +11,6 @@ import SettingsPanel from "@/components/SettingsPanel";
 import AlertsPanel from "@/components/AlertsPanel";
 import AlertNotification from "@/components/AlertNotification";
 import ExchangePanel from "@/components/ExchangePanel";
-import ComparisonPanel from "@/components/ComparisonPanel";
 import MarketHeatmapPanel from "@/components/MarketHeatmapPanel";
 import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
 import CorrelationPanel from "@/components/CorrelationPanel";

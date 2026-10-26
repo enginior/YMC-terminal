@@ -11,8 +11,8 @@ Bloomberg Terminal-style Next.js workstation for BTC/USDT and perpetual crypto d
 
 ## Commands
 - `npm run dev` — start dev server (localhost:3030)
-- `npm run build` — production build (type-checks)
-- `npm run lint` — **broken**: Next 16 removed `next lint` and no ESLint config ships; use `npm run build` for type-checking.
+- `npm run typecheck` — type-check TypeScript without building (`tsc --noEmit`)
+- `npm run build` — production build (type-checks and compiles)
 
 ## Architecture
 ```
@@ -20,32 +20,36 @@ app/
 ├── layout.tsx              # Root layout, ThemeProvider wrapper
 ├── page.tsx                # Grid layout, panel order (persisted), orchestration
 ├── globals.css             # Base styles
+├── icon.svg                # Favicon
 ├── about/page.tsx          # About page & documentation
 └── api/
     ├── klines/route.ts     # OHLCV: static-klines history + Binance gap-fill + live tick
     ├── ticker/route.ts     # 24hr stats for MarketStats
-    ├── sentiment/route.ts  # Fear & Greed + funding rate + open interest
-    ├── comparison/route.ts # Multi-symbol ticker + sparklines
+    ├── sentiment/route.ts  # Fear & Greed + funding rate + open interest + L/S ratio
+    ├── comparison/route.ts # Multi-symbol ticker + 24h sparklines (powers Watchlist & Heatmap)
     ├── news/route.ts       # Multi-source RSS (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) + sentiment
     ├── calendar/route.ts   # Keyless high-impact macro economic calendar
     └── correlation/route.ts# BTC/ETH 30d rolling correlation
 components/
 ├── Panel.tsx               # Wrapper: drag grip + height/span. Use for side panels
 ├── CommandBar.tsx          # Top bar: logo, search, settings, clock
-├── Watchlist.tsx           # Left sidebar symbol list
-├── MarketStats.tsx         # 24hr strip (real ticker, live/offline dot)
-├── PriceChart.tsx          # Candles, volume, indicator sub-panes, drawing tools
+├── Watchlist.tsx           # Left sidebar symbol list with inline 24h sparklines and sorting
+├── MarketStats.tsx         # 24hr strip (real ticker, mark price, basis spread, live/offline dot)
+├── PriceChart.tsx          # Candles/Heikin-Ashi/Line visuals, indicators, sub-panes, drawing tools, session H/L
 ├── OrderBook.tsx           # Bid/ask ladder
 ├── TradeTape.tsx           # Time & sales
+├── LiquidationsTape.tsx    # Live perpetual liquidation feed (!forceOrder@arr)
 ├── AlertsPanel.tsx         # Price alerts (persisted)
 ├── AlertNotification.tsx   # Toast for triggered alerts
 ├── ExchangePanel.tsx       # Per-exchange prices, aggregation, spread
-├── ComparisonPanel.tsx     # Multi-symbol sparklines
+├── MarketHeatmapPanel.tsx  # 24h volume-weighted crypto treemap status widget
 ├── EconomicCalendarPanel.tsx # High-impact macro calendar events
-├── MarketSentimentPanel.tsx# F&G gauge, funding rates, OI
+├── MarketSentimentPanel.tsx# F&G gauge, funding rates, countdown, OI, L/S ratio
 ├── CorrelationPanel.tsx    # BTC/ETH correlation bars
 ├── NewsFeedPanel.tsx       # News with bull/bear filter
-└── SettingsPanel.tsx       # Theme presets + color editor
+├── SettingsPanel.tsx       # Theme presets + color editor + reset layout
+├── HotkeysModal.tsx        # Bloomberg shortcut cheat sheet modal (?)
+└── AssetIcon.tsx           # Vector coin logos, metallic bullion ingots, crude oil drum
 context/
 └── ThemeContext.tsx        # 15-color theme, presets, localStorage persistence
 hooks/
@@ -55,9 +59,10 @@ lib/
 ├── types.ts                # Candle, Trade, OrderBookEntry, WatchlistItem
 ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)
 ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
+├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
-├── drawings.ts             # Level / trend / box drawings + live draft, series primitive
+├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
 └── links.ts                # Canonical repository links
 ```
 
@@ -91,9 +96,11 @@ lib/
 | Coinbase WebSocket | Trades (price aggregate) | `wss://ws-feed.exchange.coinbase.com` |
 | OKX WebSocket | Trades (price aggregate) | `wss://ws.okx.com:8443/ws/v5/public` |
 | Bybit WebSocket | Trades (price aggregate) | `wss://stream.bybit.com/v5/public/spot` |
-| Binance REST | Klines (fill/live), 24hr ticker, funding, OI | `api.binance.com/api/v3/`, `fapi.binance.com/fapi/v1/` |
+| Binance Futures WebSocket | Real-time liquidation bursts | `wss://fstream.binance.com/ws/!forceOrder@arr` |
+| Binance REST (Spot & Futures) | Klines, 24hr ticker, funding, OI, L/S ratio | `api.binance.com/api/v3/`, `fapi.binance.com/fapi/v1/`, `fapi.binance.com/futures/data/` |
 | alternative.me | Fear & Greed Index | `api.alternative.me/fng/` |
-| CoinDesk RSS | News headlines | `coindesk.com/arc/outboundfeeds/rss/` |
+| biquote.io | High-impact macroeconomic calendar | `biquote.io/api/calendar` |
+| Multi-Source RSS | News headlines (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) | Multiple outbound feeds |
 | static-klines | Historical OHLCV to 2010 | `finom.github.io/static-klines/api/klines/` |
 
 ## Key Conventions
@@ -164,12 +171,12 @@ lib/
 - **Skip exactly one save when persisting to localStorage.** The save effect also
   runs on mount with the empty/default initial state and would clobber storage
   before the load effect's state lands (StrictMode double-invokes the mount, so
-  the second load reads the clobbered value). Applied in three places: the
-  `skipNextSaveRef` guard in `PriceChart`'s drawings persistence,
-  `skipThemeSaveRef` / `skipSavedThemesSaveRef` in `ThemeContext`, and
-  `skipNextSaveRef` in `useAlerts` (theme was silently resetting to Default, and
+  the second load reads the clobbered value). Applied in: the
+  `skipNextSaveRef` / `skipChartTypeSaveRef` / `skipSessionHLSaveRef` guards in `PriceChart`
+  (drawings, chart type, session H/L persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
+  in `ThemeContext`, and `skipNextSaveRef` in `useAlerts` (theme was silently resetting to Default, and
   alerts + their prefs were wiped, on every reload before this).
-- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`.
+- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`.
 
 ## Known Limitations
 - BTC/SPX/DXY/Gold correlation are placeholders (needs a premium TradFi feed)
