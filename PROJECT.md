@@ -63,6 +63,7 @@ ymc-terminal/
 │   ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)
 │   ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
 │   ├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
+│   ├── newsTags.ts             # Headline tagging (UNIVERSE assets + ETF/SEC/MACRO)
 │   ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 │   ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 │   ├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive

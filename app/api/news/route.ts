@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { tagHeadline } from "@/lib/newsTags";
 
-const MAX_ITEMS = 30;
-const MAX_PER_FEED = 8;
+const MAX_ITEMS = 80;
+const MAX_PER_FEED = 15;
 
 const FEEDS = [
   { name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/" },
@@ -70,12 +71,21 @@ function extractFeedItems(xml: string, feedName: string) {
       block.match(/<title>(.*?)<\/title>/)?.[1] ||
       "";
     if (!title.trim()) continue;
+    const cleanTitle = title
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim();
+    if (!cleanTitle) continue;
     const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || "";
     const ts = pubDate ? new Date(pubDate).getTime() : 0;
     items.push({
-      title: title.trim(),
+      title: cleanTitle,
       source: feedName,
-      sentiment: classifySentiment(title),
+      sentiment: classifySentiment(cleanTitle),
+      tags: tagHeadline(cleanTitle),
       time: formatTime(pubDate),
       sortTime: ts,
     });
@@ -115,7 +125,14 @@ export async function GET() {
       return true;
     })
     .slice(0, MAX_ITEMS)
-    .map((item, i) => ({ id: i, title: item.title, source: item.source, sentiment: item.sentiment, time: item.time }));
+    .map((item, i) => ({
+      id: i,
+      title: item.title,
+      source: item.source,
+      sentiment: item.sentiment,
+      tags: item.tags ?? [],
+      time: item.time,
+    }));
 
   return NextResponse.json(merged, { headers: { "Cache-Control": "s-maxage=60" } });
 }

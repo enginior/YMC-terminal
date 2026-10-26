@@ -286,7 +286,7 @@ export default function Home() {
         body = <CorrelationPanel />;
         break;
       case "news":
-        body = <NewsFeedPanel />;
+        body = <NewsFeedPanel symbol={selectedSymbol} />;
         break;
       default:
         return null;
@@ -344,7 +344,7 @@ export default function Home() {
       case "correlation":
         return <CorrelationPanel />;
       case "news":
-        return <NewsFeedPanel />;
+        return <NewsFeedPanel symbol={selectedSymbol} />;
       case "calendar":
         return <EconomicCalendarPanel />;
       case "heatmap":
@@ -502,7 +502,7 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 420 }}>
-            <NewsFeedPanel />
+            <NewsFeedPanel symbol={selectedSymbol} />
           </div>
         </div>
 

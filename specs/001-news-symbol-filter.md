@@ -1,6 +1,6 @@
 # 001 — News Symbol Tagging & "Active Asset" Filter
 
-**Status:** Ready
+**Status:** Done
 **Priority:** P4 · **Effort:** S
 **Depends on:** 000 (soft — docs only)
 
@@ -92,13 +92,13 @@ Pass `symbol={selectedSymbol}` to all **three** `<NewsFeedPanel />` sites.
 - Adding new RSS feeds.
 
 ## Acceptance checklist
-- [ ] `npm run build` passes
-- [ ] `/api/news` items all have a `tags` array (possibly empty)
-- [ ] "Second", "linked", "Binance" headlines do not get SEC/LINK/BNB tags
-- [ ] Toggle on + switch BTC → ETH: the list updates without a refetch
-- [ ] Toggle + sentiment filter combine correctly
-- [ ] Empty state shows the real count, no placeholders
-- [ ] Works in grid, maximized and narrow (<900px) layouts
+- [x] `npm run build` passes
+- [x] `/api/news` items all have a `tags` array (possibly empty)
+- [x] "Second", "linked", "Binance" headlines do not get SEC/LINK/BNB tags
+- [x] Toggle on + switch BTC → ETH: the list updates without a refetch
+- [x] Toggle + sentiment filter combine correctly
+- [x] Empty state shows the real count, no placeholders
+- [x] Works in grid, maximized and narrow (<900px) layouts
 
 ## Docs to update
 - AGENTS.md: add `lib/newsTags.ts` to Architecture; one-line convention: "News tags
@@ -108,4 +108,9 @@ Pass `symbol={selectedSymbol}` to all **three** `<NewsFeedPanel />` sites.
   Impact Filter" done once 002 also lands.
 
 ## Implementation notes
-_(implementer fills in)_
+- Created `lib/newsTags.ts` with strict word-boundary (`\b`) regexes for all 12 `UNIVERSE` assets plus `ETF`, `SEC`, and `MACRO`. Enforced case-sensitive matching for tickers that collide with common English words (`SEC`, `LINK`, `SUI`, `BNB`, `ETH`, `SOL`, `DOGE`, `AVAX`, `XAU`, `XAG`), preventing false matches on headlines like "Second", "linked", and "Binance". Added development-time consistency check against `UNIVERSE`.
+- Updated `app/api/news/route.ts` to tag headlines server-side via `tagHeadline()`, HTML-entity decode titles, and increased feed limits from 8 -> 15 per feed and 30 -> 80 total items.
+- Updated `components/NewsFeedPanel.tsx` to accept a `symbol` prop (`selectedSymbol`), render an in-memory `◎ {activeBase}` toggle button in the header alongside sentiment filters, highlight active asset tag chips in `theme.yellow` (with max 3 chips + `+N` remainder indicator), and show honest dynamic empty counts (`No {activeBase} headlines in the latest {N}`).
+- Updated `app/page.tsx` to pass `symbol={selectedSymbol}` across all three render locations (`renderPanel`, `renderMaximizedContent`, and the narrow layout).
+- Verified `npm run typecheck` and `npm run build` both exit 0. Live `/api/news` route output verified.
+- Synced `AGENTS.md`, `PROJECT.md`, and `README.md`.

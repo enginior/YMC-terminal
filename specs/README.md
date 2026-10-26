@@ -31,7 +31,7 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | # | Spec | Status |
 |---|------|--------|
 | 000 | [Baseline audit & doc drift](./000-baseline-audit.md) | Done |
-| 001 | [News symbol tagging & active-asset filter](./001-news-symbol-filter.md) | Ready |
+| 001 | [News symbol tagging & active-asset filter](./001-news-symbol-filter.md) | Done |
 | 002 | [Calendar impact & currency filter](./002-calendar-impact-currency-filter.md) | Ready |
 | 003 | [Reactive tick store (render isolation)](./003-reactive-tick-store.md) | Ready |
 

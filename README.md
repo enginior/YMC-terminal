@@ -56,7 +56,7 @@ React/Next.js stack. No API keys, no paid feeds — every data source is free an
 - **Economic Calendar** — high-impact macroeconomic events (Fed, CPI, NFP, interest rate decisions) with previous, forecast, and actual prints.
 - **Correlation** — BTC/ETH 30-day rolling correlation (BTC/SPX, DXY and Gold are
   placeholders pending a TradFi feed).
-- **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter.
+- **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter, asset tagging, and a 1-click active-symbol filter.
 
 ### Alerts & theming
 - **Price alerts** — above/below thresholds with a sound notification (on/off
