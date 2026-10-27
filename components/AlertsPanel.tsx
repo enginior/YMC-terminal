@@ -3,10 +3,11 @@
 import { memo, useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { PriceAlert, AlertPrefs } from "@/hooks/useAlerts";
+import { useMarket } from "@/lib/marketStore";
 
 interface AlertsPanelProps {
   alerts: PriceAlert[];
-  currentPrice: number;
+  currentPrice?: number;
   symbol: string;
   onAddAlert: (symbol: string, condition: "above" | "below", price: number) => void;
   onRemoveAlert: (id: number) => void;
@@ -17,7 +18,7 @@ interface AlertsPanelProps {
 
 function AlertsPanel({
   alerts,
-  currentPrice,
+  currentPrice: propPrice,
   symbol,
   onAddAlert,
   onRemoveAlert,
@@ -26,6 +27,8 @@ function AlertsPanel({
   onEnableSound,
 }: AlertsPanelProps) {
   const { theme } = useTheme();
+  const storePrice = useMarket((s) => s.price);
+  const currentPrice = propPrice ?? storePrice;
   const [condition, setCondition] = useState<"above" | "below">("above");
   const [price, setPrice] = useState("");
 

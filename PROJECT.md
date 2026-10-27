@@ -10,7 +10,7 @@ theming, drag-and-drop panels, technical indicators, and price alerts.
 - **Styling:** Tailwind CSS v4 (CSS-first, no `tailwind.config.js`) + inline
   styles driven by `ThemeContext`
 - **Charts:** lightweight-charts 5.2.1 (TradingView) — v5 series API (`addSeries`) + native sub-panes (`addPane`)
-- **State:** React Context (`ThemeContext`), custom hooks (`useMultiExchangeData`, `useAlerts`)
+- **State:** React Context (`ThemeContext`), reactive external tick store (`marketStore` via `useMarket`), custom hooks (`useMarketFeed`, `useAlerts`)
 - **Data:** Binance/Coinbase/OKX/Bybit WebSocket + Binance REST + static-klines +
   alternative.me (Fear & Greed) + biquote.io (Economic Calendar) + Multi-source RSS
 - **Deployment:** Vercel (Production)
@@ -64,6 +64,8 @@ ymc-terminal/
 │   ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
 │   ├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
 │   ├── newsTags.ts             # Headline tagging (UNIVERSE assets + ETF/SEC/MACRO)
+│   ├── marketStore.ts          # Reactive market state store (useSyncExternalStore + rAF batching)
+│   ├── devRenderCount.ts       # Opt-in dev-only render logger (btc-terminal:debug-renders)
 │   ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 │   ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 │   ├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
@@ -168,7 +170,7 @@ useAlerts    → price monitoring → AlertNotification (toast)
 - [x] Sound effects for alerts — on/off toggle, volume slider, autoplay handling
 - [x] Multiple saved themes — named palettes, persisted, deletable
 - [x] Responsive design — single-column layout below 900px
-- [x] Performance optimization — socket ticks throttled to 1Hz, panels memoized
+- [x] Performance optimization — reactive external tick store with rAF batching, 1Hz price throttle, and render isolation
 - [x] Favicon (`app/icon.svg`)
 - [x] Chart viewport refit + container resize handling on symbol/timeframe change
 - [x] High-impact economic calendar panel (`components/EconomicCalendarPanel.tsx`)

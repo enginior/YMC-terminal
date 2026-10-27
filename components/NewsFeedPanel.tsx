@@ -3,6 +3,7 @@
 import { memo, useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { baseOf } from "@/lib/newsTags";
+import { useRenderCount } from "@/lib/devRenderCount";
 
 interface NewsItem {
   id: number;
@@ -18,6 +19,7 @@ interface NewsFeedPanelProps {
 }
 
 function NewsFeedPanel({ symbol = "BTC/USDT" }: NewsFeedPanelProps) {
+  useRenderCount("NewsFeedPanel");
   const { theme } = useTheme();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [filter, setFilter] = useState<"all" | "positive" | "negative" | "neutral">("all");

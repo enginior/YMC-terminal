@@ -1,22 +1,29 @@
 "use client";
 
+import { memo } from "react";
 import { useTheme } from "@/context/ThemeContext";
-
-interface ExchangeData {
-  name: string;
-  price: number;
-  connected: boolean;
-  lastUpdate: number;
-}
+import { useMarket, ExchangeData } from "@/lib/marketStore";
 
 interface ExchangePanelProps {
-  prices: ExchangeData[];
-  aggregatedPrice: number;
-  exchangeCount: number;
+  prices?: ExchangeData[];
+  aggregatedPrice?: number;
+  exchangeCount?: number;
 }
 
-export default function ExchangePanel({ prices, aggregatedPrice, exchangeCount }: ExchangePanelProps) {
+function ExchangePanel({
+  prices: propPrices,
+  aggregatedPrice: propAggregatedPrice,
+  exchangeCount: propExchangeCount,
+}: ExchangePanelProps) {
   const { theme } = useTheme();
+
+  const storeVenues = useMarket((s) => s.venues);
+  const storeAggregatedPrice = useMarket((s) => s.aggregatedPrice);
+
+  const prices = propPrices ?? storeVenues;
+  const aggregatedPrice = propAggregatedPrice ?? storeAggregatedPrice;
+  const exchangeCount =
+    propExchangeCount ?? prices.filter((p) => p.connected).length;
 
   const maxPrice = Math.max(...prices.filter((p) => p.connected).map((p) => p.price), 0);
   const minPrice = Math.min(...prices.filter((p) => p.connected).map((p) => p.price), Infinity);
@@ -72,3 +79,5 @@ export default function ExchangePanel({ prices, aggregatedPrice, exchangeCount }
     </div>
   );
 }
+
+export default memo(ExchangePanel);

@@ -61,6 +61,8 @@ lib/
 ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
 ├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
 ├── newsTags.ts             # Headline tagging (UNIVERSE assets + ETF/SEC/MACRO)
+├── marketStore.ts          # Reactive market state store (useSyncExternalStore + rAF batching)
+├── devRenderCount.ts       # Opt-in dev-only render logger (btc-terminal:debug-renders)
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 ├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
@@ -105,6 +107,7 @@ lib/
 | static-klines | Historical OHLCV to 2010 | `finom.github.io/static-klines/api/klines/` |
 
 ## Key Conventions
+- **Live market data lives in `marketStore`.** Components select slices with `useMarket`. Never lift socket data into `Home` state or props. Selectors must return stable references.
 - **News tags are derived server-side from `lib/newsTags.ts`; add a row when extending `UNIVERSE`.**
 - **Timeframes are lowercase Binance codes** (`1m 5m 15m 30m 1h 2h 4h 1d`). The API route normalizes, but keep the UI consistent or the selected-button check breaks.
 - All colors come from `useTheme()`. Never hardcode hex or Tailwind color classes in components.
@@ -178,7 +181,7 @@ lib/
   (drawings, chart type, session H/L persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
   in `ThemeContext`, `skipNextSaveRef` in `useAlerts`, and `skipNextSaveRef` in `EconomicCalendarPanel` (calendar filters persistence; theme was silently resetting to Default, and
   alerts + their prefs were wiped, on every reload before this).
-- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`.
+- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters` (plus opt-in read-only `btc-terminal:debug-renders`).
 
 ## Known Limitations
 - BTC/SPX/DXY/Gold correlation are placeholders (needs a premium TradFi feed)

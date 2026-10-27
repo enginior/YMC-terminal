@@ -1,7 +1,10 @@
 "use client";
 
+import { memo } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { AssetIcon } from "@/components/AssetIcon";
+import { useMarket } from "@/lib/marketStore";
+import { useRenderCount } from "@/lib/devRenderCount";
 
 export interface TickerStats {
   lastPrice: number;
@@ -18,10 +21,10 @@ export interface TickerStats {
 
 interface MarketStatsProps {
   symbol: string;
-  price: number;
-  direction: "up" | "down";
+  price?: number;
+  direction?: "up" | "down";
   ticker: TickerStats | null;
-  connected: boolean;
+  connected?: boolean;
 }
 
 function fmtUsd(n: number, digits = 2) {
@@ -44,8 +47,23 @@ function fmtVolume(n: number) {
   return n.toFixed(2);
 }
 
-export default function MarketStats({ symbol, price, direction, ticker, connected }: MarketStatsProps) {
+function MarketStats({
+  symbol,
+  price: propPrice,
+  direction: propDirection,
+  ticker,
+  connected: propConnected,
+}: MarketStatsProps) {
+  useRenderCount("MarketStats");
   const { theme } = useTheme();
+
+  const storePrice = useMarket((s) => s.price);
+  const storeDirection = useMarket((s) => s.direction);
+  const storeConnected = useMarket((s) => s.connected);
+
+  const price = propPrice ?? storePrice;
+  const direction = propDirection ?? storeDirection;
+  const connected = propConnected ?? storeConnected;
 
   const up = ticker ? ticker.priceChange >= 0 : direction === "up";
   const changeColor = up ? theme.green : theme.red;
@@ -138,3 +156,5 @@ export default function MarketStats({ symbol, price, direction, ticker, connecte
     </div>
   );
 }
+
+export default memo(MarketStats);

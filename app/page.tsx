@@ -19,8 +19,9 @@ import MarketSentimentPanel from "@/components/MarketSentimentPanel";
 import HotkeysModal from "@/components/HotkeysModal";
 import Panel from "@/components/Panel";
 import { useTheme, THEME_PRESETS } from "@/context/ThemeContext";
-import { useMultiExchangeData } from "@/hooks/useMultiExchangeData";
+import { useMarketFeed } from "@/hooks/useMultiExchangeData";
 import { useAlerts } from "@/hooks/useAlerts";
+import { useRenderCount } from "@/lib/devRenderCount";
 import { toBinanceSymbol, resolvePrefix, UNIVERSE } from "@/lib/symbols";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
@@ -61,14 +62,13 @@ function loadOrder(): PanelId[] {
 }
 
 export default function Home() {
+  useRenderCount("Home");
   const { theme, applyPreset } = useTheme();
   const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
   const [timeframe, setTimeframe] = useState("1h");
   const [showSettings, setShowSettings] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [maximizedPanel, setMaximizedPanel] = useState<string | null>(null);
-  const [direction, setDirection] = useState<"up" | "down">("up");
-  const [price, setPrice] = useState(0);
   const [ticker, setTicker] = useState<TickerStats | null>(null);
   const [panelOrder, setPanelOrder] = useState<PanelId[]>([...DEFAULT_ORDER]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -160,43 +160,19 @@ export default function Home() {
 
   const binanceSymbol = toChartSymbol(selectedSymbol) ?? "BTCUSDT";
 
+  // Stream data into marketStore outside React state (render isolation)
+  useMarketFeed(binanceSymbol, timeframe);
+
   const {
-    prices: exchangePrices,
-    aggregatedPrice,
-    candles,
-    trades,
-    orderBook,
-    connected,
-    exchangeCount,
-    candleError,
-  } = useMultiExchangeData(binanceSymbol, timeframe);
-
-  // Live price comes only from the sockets. When they drop we hold the last real
-  // value and flag it, rather than inventing a drifting number.
-  //
-  // The socket fires many times a second, so committing it straight to state
-  // re-rendered the entire tree on every trade. The live value lands in a ref and
-  // is flushed into state on a 1s timer instead, which is all the UI resolves to.
-  const livePriceRef = useRef(0);
-  livePriceRef.current = aggregatedPrice > 0 ? aggregatedPrice : livePriceRef.current;
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const next = livePriceRef.current;
-      if (next > 0) setPrice(next);
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Direction is derived, never set from inside another state updater
-  const prevPriceRef = useRef(0);
-  useEffect(() => {
-    if (price <= 0) return;
-    setDirection(price >= prevPriceRef.current ? "up" : "down");
-    prevPriceRef.current = price;
-  }, [price]);
-
-  const { alerts, addAlert, removeAlert, showNotification, dismissNotification, prefs, updatePrefs, primeAudio } = useAlerts(price);
+    alerts,
+    addAlert,
+    removeAlert,
+    showNotification,
+    dismissNotification,
+    prefs,
+    updatePrefs,
+    primeAudio,
+  } = useAlerts();
 
   // Real 24hr stats from Binance
   useEffect(() => {
@@ -251,36 +227,29 @@ export default function Home() {
     let body: React.ReactNode;
     switch (id) {
       case "orderbook":
-        body = <OrderBook data={orderBook} />;
+        body = <OrderBook />;
         break;
       case "tradetape":
-        body = <TradeTape trades={trades} />;
+        body = <TradeTape />;
         break;
       case "alerts":
         body = (
-<AlertsPanel
-              alerts={alerts}
-              currentPrice={price}
-              symbol={selectedSymbol}
-              onAddAlert={addAlert}
-              onRemoveAlert={removeAlert}
-              prefs={prefs}
-              onPrefsChange={updatePrefs}
-              onEnableSound={primeAudio}
-            />
+          <AlertsPanel
+            alerts={alerts}
+            symbol={selectedSymbol}
+            onAddAlert={addAlert}
+            onRemoveAlert={removeAlert}
+            prefs={prefs}
+            onPrefsChange={updatePrefs}
+            onEnableSound={primeAudio}
+          />
         );
         break;
       case "sentiment":
         body = <MarketSentimentPanel symbol={selectedSymbol} />;
         break;
       case "exchange":
-        body = (
-          <ExchangePanel
-            prices={exchangePrices}
-            aggregatedPrice={aggregatedPrice}
-            exchangeCount={exchangeCount}
-          />
-        );
+        body = <ExchangePanel />;
         break;
       case "correlation":
         body = <CorrelationPanel />;
@@ -304,25 +273,22 @@ export default function Home() {
       case "chart":
         return (
           <PriceChart
-            candles={candles}
             symbol={selectedSymbol}
             timeframe={timeframe}
             onTimeframeChange={setTimeframe}
-            candleError={candleError}
             onToggleMaximize={() => setMaximizedPanel(null)}
             isMaximized={true}
             ticker={ticker}
           />
         );
       case "orderbook":
-        return <OrderBook data={orderBook} />;
+        return <OrderBook />;
       case "tradetape":
-        return <TradeTape trades={trades} />;
+        return <TradeTape />;
       case "alerts":
         return (
           <AlertsPanel
             alerts={alerts}
-            currentPrice={price}
             symbol={selectedSymbol}
             onAddAlert={addAlert}
             onRemoveAlert={removeAlert}
@@ -334,13 +300,7 @@ export default function Home() {
       case "sentiment":
         return <MarketSentimentPanel symbol={selectedSymbol} />;
       case "exchange":
-        return (
-          <ExchangePanel
-            prices={exchangePrices}
-            aggregatedPrice={aggregatedPrice}
-            exchangeCount={exchangeCount}
-          />
-        );
+        return <ExchangePanel />;
       case "correlation":
         return <CorrelationPanel />;
       case "news":
@@ -434,20 +394,15 @@ export default function Home() {
           <div style={{ background: theme.panel }}>
             <MarketStats
               symbol={selectedSymbol}
-              price={price}
-              direction={direction}
               ticker={ticker}
-              connected={connected}
             />
           </div>
 
           <div style={{ background: theme.panel, height: 420 }}>
             <PriceChart
-              candles={candles}
               symbol={selectedSymbol}
               timeframe={timeframe}
               onTimeframeChange={setTimeframe}
-              candleError={candleError}
               ticker={ticker}
             />
           </div>
@@ -457,11 +412,11 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
-            <OrderBook data={orderBook} />
+            <OrderBook />
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
-            <TradeTape trades={trades} />
+            <TradeTape />
           </div>
 
           <div style={{ background: theme.panel, height: 260 }}>
@@ -469,11 +424,7 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 340 }}>
-            <ExchangePanel
-              prices={exchangePrices}
-              aggregatedPrice={aggregatedPrice}
-              exchangeCount={exchangeCount}
-            />
+            <ExchangePanel />
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
@@ -491,7 +442,6 @@ export default function Home() {
           <div style={{ background: theme.panel, height: 360 }}>
             <AlertsPanel
               alerts={alerts}
-              currentPrice={price}
               symbol={selectedSymbol}
               onAddAlert={addAlert}
               onRemoveAlert={removeAlert}
@@ -573,20 +523,15 @@ export default function Home() {
           <div className="col-span-10 shrink-0" style={{ background: theme.panel }}>
             <MarketStats
               symbol={selectedSymbol}
-              price={price}
-              direction={direction}
               ticker={ticker}
-              connected={connected}
             />
           </div>
 
           <div className="col-span-7 overflow-hidden min-h-0" style={{ background: theme.panel }}>
             <PriceChart
-              candles={candles}
               symbol={selectedSymbol}
               timeframe={timeframe}
               onTimeframeChange={setTimeframe}
-              candleError={candleError}
               onToggleMaximize={() => setMaximizedPanel("chart")}
               isMaximized={false}
               ticker={ticker}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { WatchlistItem } from "@/lib/types";
 import { isChartable } from "@/lib/symbols";
@@ -13,7 +13,7 @@ interface WatchlistProps {
 
 type SortMode = "default" | "change" | "volume" | "name";
 
-export default function Watchlist({ selected, onSelect }: WatchlistProps) {
+function Watchlist({ selected, onSelect }: WatchlistProps) {
   const { theme } = useTheme();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("default");
@@ -210,3 +210,5 @@ export default function Watchlist({ selected, onSelect }: WatchlistProps) {
     </div>
   );
 }
+
+export default memo(Watchlist);

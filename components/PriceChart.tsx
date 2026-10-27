@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -18,6 +18,7 @@ import {
 } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { useTheme, Theme } from "@/context/ThemeContext";
+import { useMarket } from "@/lib/marketStore";
 import { sma, ema, rsi, macd, bollingerBands, stochRsi } from "@/lib/indicators";
 import { heikenAshi } from "@/lib/heikenAshi";
 import { PriceBandPrimitive } from "@/lib/bands";
@@ -120,7 +121,7 @@ function candleAt(candles: Candle[], time: number): Candle | undefined {
 }
 
 interface PriceChartProps {
-  candles: Candle[];
+  candles?: Candle[];
   symbol: string;
   timeframe: string;
   onTimeframeChange: (tf: string) => void;
@@ -173,17 +174,21 @@ function ChartTypeIcon({
   );
 }
 
-export default function PriceChart({
-  candles,
+function PriceChart({
+  candles: propCandles,
   symbol,
   timeframe,
   onTimeframeChange,
-  candleError = false,
+  candleError: propCandleError,
   onToggleMaximize,
   isMaximized = false,
   ticker,
 }: PriceChartProps) {
   const { theme } = useTheme();
+  const storeCandles = useMarket((s) => s.candles);
+  const storeCandleError = useMarket((s) => s.candleError);
+  const candles = propCandles ?? storeCandles;
+  const candleError = propCandleError ?? storeCandleError;
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -1635,3 +1640,5 @@ export default function PriceChart({
     </div>
   );
 }
+
+export default memo(PriceChart);

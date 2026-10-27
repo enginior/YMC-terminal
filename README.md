@@ -152,6 +152,7 @@ State is kept in `localStorage` under these keys:
 `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`,
 `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`,
 `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`
+(plus opt-in read-only `btc-terminal:debug-renders`)
 
 ## Known limitations
 

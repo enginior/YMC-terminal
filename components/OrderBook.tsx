@@ -1,14 +1,20 @@
 "use client";
 
+import { memo } from "react";
 import { OrderBookEntry } from "@/lib/types";
 import { useTheme } from "@/context/ThemeContext";
+import { useMarket } from "@/lib/marketStore";
+import { useRenderCount } from "@/lib/devRenderCount";
 
 interface OrderBookProps {
-  data: { bids: OrderBookEntry[]; asks: OrderBookEntry[] };
+  data?: { bids: OrderBookEntry[]; asks: OrderBookEntry[] };
 }
 
-export default function OrderBook({ data }: OrderBookProps) {
+function OrderBook({ data: propData }: OrderBookProps) {
+  useRenderCount("OrderBook");
   const { theme } = useTheme();
+  const storeData = useMarket((s) => s.orderBook);
+  const data = propData ?? storeData;
 
   const maxTotal = Math.max(
     data.bids[data.bids.length - 1]?.total || 0,
@@ -55,3 +61,5 @@ export default function OrderBook({ data }: OrderBookProps) {
     </div>
   );
 }
+
+export default memo(OrderBook);

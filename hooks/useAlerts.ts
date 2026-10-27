@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { marketStore } from "@/lib/marketStore";
 
 export interface PriceAlert {
   id: number;
@@ -22,11 +23,16 @@ export interface AlertPrefs {
 
 const DEFAULT_PREFS: AlertPrefs = { sound: true, volume: 0.25 };
 
-export function useAlerts(currentPrice: number) {
+export function useAlerts(explicitPrice?: number) {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [showNotification, setShowNotification] = useState<PriceAlert | null>(null);
   const [prefs, setPrefs] = useState<AlertPrefs>(DEFAULT_PREFS);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lastEvaluatedPriceRef = useRef(0);
+  const alertsRef = useRef(alerts);
+  alertsRef.current = alerts;
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   // The save effect below also fires on mount with the empty/default initial
   // state, which would overwrite stored alerts before the load effect's state
   // lands — and under StrictMode the mount runs twice, so the second load would
@@ -128,26 +134,41 @@ export function useAlerts(currentPrice: number) {
     }
   }, [prefs.volume]);
 
-  // Evaluate alerts outside the state updater so the side effects
-  // (sound + toast) fire exactly once per crossing.
+  // Evaluate alerts imperatively on store updates (or explicitPrice if provided)
+  // so Home does not need to subscribe or pass down price.
   useEffect(() => {
-    if (currentPrice <= 0) return;
+    const evaluate = (currentPrice: number) => {
+      if (currentPrice <= 0 || currentPrice === lastEvaluatedPriceRef.current) return;
+      lastEvaluatedPriceRef.current = currentPrice;
 
-    const hit = alerts.find(
-      (a) =>
-        a.active &&
-        !a.triggered &&
-        ((a.condition === "above" && currentPrice >= a.price) ||
-          (a.condition === "below" && currentPrice <= a.price))
-    );
-    if (!hit) return;
+      const currentAlerts = alertsRef.current;
+      const hit = currentAlerts.find(
+        (a) =>
+          a.active &&
+          !a.triggered &&
+          ((a.condition === "above" && currentPrice >= a.price) ||
+            (a.condition === "below" && currentPrice <= a.price))
+      );
+      if (!hit) return;
 
-    if (prefs.sound) playAlertSound();
-    setShowNotification({ ...hit, triggered: true });
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === hit.id ? { ...a, triggered: true, active: false } : a))
-    );
-  }, [currentPrice, alerts, playAlertSound, prefs.sound]);
+      if (prefsRef.current.sound) playAlertSound();
+      setShowNotification({ ...hit, triggered: true });
+      setAlerts((prev) =>
+        prev.map((a) => (a.id === hit.id ? { ...a, triggered: true, active: false } : a))
+      );
+    };
+
+    if (typeof explicitPrice === "number" && explicitPrice > 0) {
+      evaluate(explicitPrice);
+    }
+
+    const unsubscribe = marketStore.subscribe(() => {
+      const p = marketStore.getState().price;
+      evaluate(p);
+    });
+
+    return unsubscribe;
+  }, [explicitPrice, playAlertSound]);
 
   const addAlert = useCallback((symbol: string, condition: "above" | "below", price: number) => {
     setAlerts((prev) => [

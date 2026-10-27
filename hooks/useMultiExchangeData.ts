@@ -1,27 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Candle, Trade, OrderBookEntry } from "@/lib/types";
+import { useEffect, useRef, useCallback } from "react";
+import { Trade, OrderBookEntry } from "@/lib/types";
 import { isFuturesSymbol } from "@/lib/symbols";
-
-interface ExchangeData {
-  name: string;
-  price: number;
-  connected: boolean;
-  lastUpdate: number;
-}
-
-interface MultiExchangeData {
-  prices: ExchangeData[];
-  aggregatedPrice: number;
-  candles: Candle[];
-  trades: Trade[];
-  orderBook: { bids: OrderBookEntry[]; asks: OrderBookEntry[] };
-  connected: boolean;
-  exchangeCount: number;
-  /** True when the candle fetch failed, so the UI can say so instead of "Loading". */
-  candleError: boolean;
-}
+import { marketStore, ExchangeData } from "@/lib/marketStore";
 
 const RECONNECT_MS = 3000;
 const MAX_TRADES = 50;
@@ -156,16 +138,11 @@ const EXCHANGES = [
   },
 ] as const;
 
-export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): MultiExchangeData {
-  const [prices, setPrices] = useState<ExchangeData[]>([]);
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [orderBook, setOrderBook] = useState<{ bids: OrderBookEntry[]; asks: OrderBookEntry[] }>({
-    bids: [],
-    asks: [],
-  });
-  const [candleError, setCandleError] = useState(false);
-
+/**
+ * Feeds live market data into marketStore outside React state.
+ * Never causes the caller (Home) to re-render.
+ */
+export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
   const socketsRef = useRef<WebSocket[]>([]);
   const retryRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const tradeIdRef = useRef(0);
@@ -180,7 +157,7 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
     new Map(EXCHANGES.map((e) => [e.name, { name: e.name, price: 0, connected: false, lastUpdate: 0 }]))
   );
 
-  const connectOne = (idx: number) => {
+  const connectOne = useCallback((idx: number) => {
     const exchange = EXCHANGES[idx];
     const currentSym = symbolRef.current;
     const isFutures = isFuturesSymbol(currentSym);
@@ -194,7 +171,9 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         price: 0,
         lastUpdate: prev.lastUpdate,
       });
-      setPrices(EXCHANGES.map((e) => pricesRef.current.get(e.name)!));
+      marketStore.setState({
+        venues: EXCHANGES.map((e) => pricesRef.current.get(e.name)!),
+      });
       return;
     }
 
@@ -210,7 +189,9 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         price: price ?? prev.price,
         lastUpdate: connected ? Date.now() : prev.lastUpdate,
       });
-      setPrices(EXCHANGES.map((e) => pricesRef.current.get(e.name)!));
+      marketStore.setState({
+        venues: EXCHANGES.map((e) => pricesRef.current.get(e.name)!),
+      });
     };
 
     ws.onopen = () => {
@@ -254,9 +235,11 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         const raw = exchange.parseBook(msg);
         let bidTotal = 0;
         let askTotal = 0;
-        setOrderBook({
-          bids: raw.bids.map((b: OrderBookEntry) => ({ ...b, total: (bidTotal += b.size) })),
-          asks: raw.asks.map((a: OrderBookEntry) => ({ ...a, total: (askTotal += a.size) })),
+        marketStore.setState({
+          orderBook: {
+            bids: raw.bids.map((b: OrderBookEntry) => ({ ...b, total: (bidTotal += b.size) })),
+            asks: raw.asks.map((a: OrderBookEntry) => ({ ...a, total: (askTotal += a.size) })),
+          },
         });
         return;
       }
@@ -265,7 +248,10 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
       const trade = exchange.parseTrade(msg);
       if (!trade || !Number.isFinite(trade.price) || trade.price <= 0) return;
       markState(true, trade.price);
-      setTrades((prev) => [{ id: tradeIdRef.current++, ...trade }, ...prev].slice(0, MAX_TRADES));
+      const currentTrades = marketStore.getState().trades;
+      marketStore.setState({
+        trades: [{ id: tradeIdRef.current++, ...trade }, ...currentTrades].slice(0, MAX_TRADES),
+      });
     };
 
     ws.onerror = () => markState(false);
@@ -282,7 +268,7 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         }, RECONNECT_MS)
       );
     };
-  };
+  }, []);
 
   const connectAll = useCallback(() => {
     retryRef.current.forEach((t) => clearTimeout(t));
@@ -293,10 +279,11 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
     });
     socketsRef.current = [];
     EXCHANGES.forEach((_, idx) => connectOne(idx));
-  }, []);
+  }, [connectOne]);
 
-  // Sockets depend on interval (kline stream) and symbol, not on candle data
+  // Reset store and connect sockets on symbol/interval change (Req. 5)
   useEffect(() => {
+    marketStore.reset(symbol, interval);
     connectAll();
     const sockets = socketsRef.current;
     return () => {
@@ -319,13 +306,11 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setCandles(data);
-          setCandleError(false);
+          marketStore.setState({ candles: data, candleError: false });
         }
       } catch {
         if (!cancelled) {
-          setCandles([]);
-          setCandleError(true);
+          marketStore.setState({ candles: [], candleError: true });
         }
       }
     };
@@ -345,12 +330,19 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return;
         const latest = data[data.length - 1];
-        setCandles((prev) => {
-          if (prev.length === 0) return [latest];
+        const prev = marketStore.getState().candles;
+        let nextCandles: typeof prev;
+        if (prev.length === 0) {
+          nextCandles = [latest];
+        } else {
           const last = prev[prev.length - 1];
-          if (last.time === latest.time) return [...prev.slice(0, -1), latest];
-          return [...prev, latest];
-        });
+          if (last.time === latest.time) {
+            nextCandles = [...prev.slice(0, -1), latest];
+          } else {
+            nextCandles = [...prev, latest];
+          }
+        }
+        marketStore.setState({ candles: nextCandles });
       } catch {}
     };
 
@@ -358,17 +350,21 @@ export function useMultiExchangeData(symbol = "btcusdt", interval = "1h"): Multi
     return () => clearInterval(id);
   }, [symbol, interval]);
 
-  const live = prices.filter((p) => p.connected && p.price > 0);
-  const aggregatedPrice = live.length > 0 ? live.reduce((s, p) => s + p.price, 0) / live.length : 0;
+  // 1 Hz price throttle: copies aggregatedPrice -> price and derives direction
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const cur = marketStore.getState().aggregatedPrice;
+      if (cur > 0) {
+        const prev = marketStore.getState().price;
+        const direction: "up" | "down" =
+          prev === 0 ? "up" : cur >= prev ? "up" : "down";
+        marketStore.setState({ price: cur, direction });
+      }
+    }, 1000);
 
-  return {
-    prices,
-    aggregatedPrice,
-    candles,
-    trades,
-    orderBook,
-    connected: live.length > 0,
-    exchangeCount: live.length,
-    candleError,
-  };
+    return () => clearInterval(timer);
+  }, []);
 }
+
+/** Legacy compatibility export */
+export const useMultiExchangeData = useMarketFeed;

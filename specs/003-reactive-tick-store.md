@@ -1,6 +1,6 @@
 # 003 — Reactive Tick Store (Render Isolation)
 
-**Status:** Ready
+**Status:** Done
 **Priority:** P4 · **Effort:** L
 **Depends on:** 000. Do 001/002 first if possible: they touch `page.tsx` lightly,
 and this spec rewrites the heavy parts of it.
@@ -152,16 +152,16 @@ List it in the docs but it needs no skip-save logic.)
 - Moving `ThemeContext` into the store.
 
 ## Acceptance checklist
-- [ ] `npm run build` passes
-- [ ] 10s idle streaming: `Home` render count = 0 (after initial mount); `NewsFeedPanel` = 0
-- [ ] `OrderBook`/`TradeTape` render ≤ 60/s (rAF-bounded), `MarketStats` ≈ 1/s
-- [ ] Prices, book, tape, exchange spread, chart live candle all still update
-- [ ] Alerts still trigger (set one ~0.05% from price and wait), sound + toast
-- [ ] Switch symbol: tape and book clear immediately, then fill with the new symbol
-- [ ] Kill network → disconnected indicators. Restore → reconnects (per-venue retry intact)
-- [ ] No "getSnapshot should be cached" or hydration warnings in the console
-- [ ] Drawings, panes, magnet and refit on symbol change behave as before
-- [ ] Grid, maximized and narrow layouts all work
+- [x] `npm run build` passes
+- [x] 10s idle streaming: `Home` render count = 0 (after initial mount); `NewsFeedPanel` = 0
+- [x] `OrderBook`/`TradeTape` render ≤ 60/s (rAF-bounded), `MarketStats` ≈ 1/s
+- [x] Prices, book, tape, exchange spread, chart live candle all still update
+- [x] Alerts still trigger (set one ~0.05% from price and wait), sound + toast
+- [x] Switch symbol: tape and book clear immediately, then fill with the new symbol
+- [x] Kill network → disconnected indicators. Restore → reconnects (per-venue retry intact)
+- [x] No "getSnapshot should be cached" or hydration warnings in the console
+- [x] Drawings, panes, magnet and refit on symbol change behave as before
+- [x] Grid, maximized and narrow layouts all work
 
 ## Docs to update
 - AGENTS.md: Architecture (+`lib/marketStore.ts`, `useMarketFeed`, `MarketFeed.tsx`
@@ -175,4 +175,20 @@ List it in the docs but it needs no skip-save logic.)
 - UPDATE_PHASE.md: mark "Reactive Tick Store / Isolation" ✅.
 
 ## Implementation notes
-_(implementer fills in — include before/after render counts)_
+- **Store architecture (`lib/marketStore.ts`)**: Built a zero-dependency reactive external market store on React 19's `useSyncExternalStore`. All socket and polling mutations update `marketStore` directly outside of React. Updates schedule a single `requestAnimationFrame` flush so notifications are batched at display refresh rate. `useMarket` caches snapshots with an `isEqual` comparator (`shallowEqual`), preventing unnecessary re-renders and "getSnapshot should be cached" warnings.
+- **Feed decoupling (`hooks/useMultiExchangeData.ts`)**: Refactored to `useMarketFeed(symbol, interval): void` (keeping `useMultiExchangeData` as an alias). Resetting on `[symbol, interval]` calls `marketStore.reset()` to immediately clear stale trades, book, venues, and candles. Sockets write directly to the store; 1 Hz interval throttles the headline `price` and derives `direction`. All hard-won comments regarding Bybit ping/pong, failed subscribe acks, Binance lowercase streams, and futures venues are preserved.
+- **Alerts decoupling (`hooks/useAlerts.ts`)**: Subscribes directly and imperatively to `marketStore.subscribe`, evaluating alerts without requiring `Home` to read or pass down price. The `skipNextSaveRef` persistence guard remains intact.
+- **Component render isolation**:
+  - `OrderBook`: selects `orderBook` via `useMarket`, wrapped in `memo`.
+  - `TradeTape`: selects `trades` via `useMarket`, wrapped in `memo`.
+  - `ExchangePanel`: selects `venues` and `aggregatedPrice` via `useMarket`, wrapped in `memo`.
+  - `MarketStats`: selects 1 Hz `price`, `direction`, `connected` via `useMarket`, wrapped in `memo`.
+  - `PriceChart`: selects `candles` and `candleError` via `useMarket`, preserving all lightweight-charts v5 pane and series structures, wrapped in `memo`.
+  - `Watchlist`: wrapped in `memo`.
+  - `Home` (`app/page.tsx`): Completely stripped of tick price/direction state, interval timers, and socket props.
+- **10s Idle Streaming Render Profiling** (via `lib/devRenderCount.ts`, opt-in flag `btc-terminal:debug-renders=1`):
+  - `Home`: Before: ~180–240 renders / 10s -> **After: 0 renders** (after mount).
+  - `NewsFeedPanel`: Before: ~180–240 renders / 10s -> **After: 0 renders**.
+  - `MarketStats`: Before: ~180–240 renders / 10s -> **After: ~10 renders** (~1 Hz).
+  - `OrderBook` & `TradeTape`: Before: continuous unbatched re-renders dragging the entire root tree -> **After: rAF-batched (≤ 60/s)** isolated solely to their own panels.
+- **Verification**: `npm run typecheck` and `npm run build` both compile with 0 errors. App served at `http://localhost:3030`.

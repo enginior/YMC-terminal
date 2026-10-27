@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Trade } from "@/lib/types";
 import { useTheme } from "@/context/ThemeContext";
 import LiquidationsTape from "@/components/LiquidationsTape";
+import { useMarket } from "@/lib/marketStore";
+import { useRenderCount } from "@/lib/devRenderCount";
 
 interface TradeTapeProps {
-  trades: Trade[];
+  trades?: Trade[];
 }
 
-export default function TradeTape({ trades }: TradeTapeProps) {
+function TradeTape({ trades: propTrades }: TradeTapeProps) {
+  useRenderCount("TradeTape");
   const { theme } = useTheme();
   const [tab, setTab] = useState<"trades" | "liquidations">("trades");
+  const storeTrades = useMarket((s) => s.trades);
+  const trades = propTrades ?? storeTrades;
 
   return (
     <div className="h-full flex flex-col">
@@ -88,3 +93,5 @@ export default function TradeTape({ trades }: TradeTapeProps) {
     </div>
   );
 }
+
+export default memo(TradeTape);
