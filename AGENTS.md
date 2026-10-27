@@ -176,9 +176,9 @@ lib/
   the second load reads the clobbered value). Applied in: the
   `skipNextSaveRef` / `skipChartTypeSaveRef` / `skipSessionHLSaveRef` guards in `PriceChart`
   (drawings, chart type, session H/L persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
-  in `ThemeContext`, and `skipNextSaveRef` in `useAlerts` (theme was silently resetting to Default, and
+  in `ThemeContext`, `skipNextSaveRef` in `useAlerts`, and `skipNextSaveRef` in `EconomicCalendarPanel` (calendar filters persistence; theme was silently resetting to Default, and
   alerts + their prefs were wiped, on every reload before this).
-- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`.
+- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`.
 
 ## Known Limitations
 - BTC/SPX/DXY/Gold correlation are placeholders (needs a premium TradFi feed)

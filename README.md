@@ -53,7 +53,7 @@ React/Next.js stack. No API keys, no paid feeds — every data source is free an
 - **Crypto Market Heatmap** — S&P 500 / Finviz / Coin360 style squarified treemap widget sized by 24h volume with high-contrast performance heat gradients and 1-click chart selection.
 - **Exchange comparison** — per-venue price, aggregated mid, and spread across Binance, Coinbase, OKX, and Bybit.
 - **Market sentiment** — Fear & Greed gauge, funding rates, 8h funding settlement countdown, annualized APR, open interest, and Global Long/Short account ratio.
-- **Economic Calendar** — high-impact macroeconomic events (Fed, CPI, NFP, interest rate decisions) with previous, forecast, and actual prints.
+- **Economic Calendar** — macroeconomic events with high/medium impact toggle, dynamic currency filtering, previous/forecast/actual prints, and importance dots.
 - **Correlation** — BTC/ETH 30-day rolling correlation (BTC/SPX, DXY and Gold are
   placeholders pending a TradFi feed).
 - **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter, asset tagging, and a 1-click active-symbol filter.
@@ -151,7 +151,7 @@ State is kept in `localStorage` under these keys:
 
 `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`,
 `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`,
-`btc-terminal:chart-type`, `btc-terminal:session-hl`
+`btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`
 
 ## Known limitations
 

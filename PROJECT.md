@@ -240,4 +240,5 @@ Deferred rather than abandoned. Ordered roughly by value per unit of effort. See
 - Default timeframe is 1h
 - localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`,
   `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`,
-  `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`
+  `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`,
+  `btc-terminal:calendar-filters`
