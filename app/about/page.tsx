@@ -19,11 +19,46 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
-    version: "v0.1.5",
-    badge: "Latest Release · Phase 4",
-    tagline: "Crypto Market Treemap Heatmap & Consolidated Sparkline Watchlist",
+    version: "v0.1.6",
+    badge: "Latest Release · Phase 4 & 5",
+    tagline: "Reactive Tick Store, Render Isolation & Targeted Intelligence Filters",
     date: "Current",
     isLatest: true,
+    categories: [
+      {
+        name: "Reactive External Tick Store (Render Isolation)",
+        items: [
+          "Zero-dependency reactive store (lib/marketStore.ts) on React 19 useSyncExternalStore with requestAnimationFrame batching.",
+          "Complete root render isolation: Home and NewsFeedPanel idle re-renders drop from ~200/10s to exactly 0 renders.",
+          "Panel-level slice subscriptions: OrderBook and TradeTape stream at display refresh rate (≤ 60/s) without parent reconciliation; MarketStats throttled to 1 Hz.",
+          "Imperative alert evaluation in useAlerts decoupling price thresholds from page state.",
+        ],
+      },
+      {
+        name: "Active-Asset News Tagging & One-Click Filter",
+        items: [
+          "Server-side keyword and ticker classification (lib/newsTags.ts) covering all 12 tracked assets plus macro topics (ETF, SEC, MACRO) with strict word-boundary regexes and case-sensitive collision protection.",
+          "Header toggle button ◎ {SYMBOL} to isolate headlines relevant to the currently charted asset with zero network refetches.",
+          "Visual tag chips with active symbol highlighted in amber, remainder badges (+N), and honest empty state counts.",
+          "Expanded headline feed limits from 30 to 80 items across 6 institutional RSS sources.",
+        ],
+      },
+      {
+        name: "Economic Calendar Impact & Currency Filters",
+        items: [
+          "Interactive compact header filters: single-choice minimum impact (HIGH vs HIGH+MED) and multi-select currency pills (USD, EUR, GBP, JPY, etc.).",
+          "6px visual importance dots on each row: red for High impact and yellow for Medium impact.",
+          "Resilient parallel upstream fetching (biquote.io) via Promise.allSettled with deduplication and partial data retention.",
+          "Persistence under btc-terminal:calendar-filters protected by skipNextSaveRef against StrictMode double-mount.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.1.5",
+    badge: "Phase 4 Release",
+    tagline: "Crypto Market Treemap Heatmap & Consolidated Sparkline Watchlist",
+    date: "Prior",
     categories: [
       {
         name: "Crypto Market Treemap Status Widget",
@@ -198,7 +233,7 @@ export default function AboutPage() {
             className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
             style={{ borderColor: theme.border, color: theme.dim }}
           >
-            v0.1.5
+            v0.1.6
           </span>
         </div>
         <span className="text-[10px] uppercase tracking-wider" style={{ color: theme.dim }}>
@@ -222,7 +257,7 @@ export default function AboutPage() {
                 className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded"
                 style={{ background: `${theme.green}25`, color: theme.green }}
               >
-                Production Release v0.1.5
+                Production Release v0.1.6
               </span>
             </div>
             <h1 className="text-2xl lg:text-3xl tracking-wide font-bold" style={{ color: theme.text }}>
@@ -357,7 +392,7 @@ export default function AboutPage() {
           >
             <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs">YMC Terminal v0.1.5</span>
+              <span className="font-mono text-xs">YMC Terminal v0.1.6</span>
               <a
                 href={REPO_URL}
                 target="_blank"
