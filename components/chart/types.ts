@@ -4,6 +4,8 @@ import { DrawingTool } from "@/lib/drawings";
 
 // Binance interval codes — lowercase, matching /api/klines
 export const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
+export const FAVORITE_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+export const MORE_TIMEFRAMES = ["30m", "2h"] as const;
 
 export type OverlayIndicator = "sma" | "ema" | "bollinger";
 export type PaneIndicator = "rsi" | "macd" | "stochrsi";
@@ -39,6 +41,59 @@ export const INDICATOR_LABELS: Record<IndicatorType, string> = {
 
 export const OVERLAYS: OverlayIndicator[] = ["sma", "ema", "bollinger"];
 export const PANES: PaneIndicator[] = ["rsi", "macd", "stochrsi"];
+
+export interface IndicatorMeta {
+  id: IndicatorType;
+  name: string;
+  category: "Overlay" | "Oscillator";
+  shortDesc: string;
+  formula: string;
+}
+
+export const INDICATOR_METAS: IndicatorMeta[] = [
+  {
+    id: "sma",
+    name: "SMA 20 / 50",
+    category: "Overlay",
+    shortDesc: "Dual Simple Moving Averages",
+    formula: "20-period (Blue) & 50-period (Yellow) trend baselines",
+  },
+  {
+    id: "ema",
+    name: "EMA 20 / 50",
+    category: "Overlay",
+    shortDesc: "Dual Exponential Moving Averages",
+    formula: "Weighted fast response (Green 20, Red 50)",
+  },
+  {
+    id: "bollinger",
+    name: "Bollinger Bands",
+    category: "Overlay",
+    shortDesc: "Volatility bands around 20 SMA",
+    formula: "SMA 20 ± 2 standard deviations",
+  },
+  {
+    id: "rsi",
+    name: "Relative Strength Index (RSI)",
+    category: "Oscillator",
+    shortDesc: "Momentum oscillator pinned to 0–100",
+    formula: "14-period standard with 70/30 overbought/oversold shaded zones",
+  },
+  {
+    id: "macd",
+    name: "MACD",
+    category: "Oscillator",
+    shortDesc: "Moving Average Convergence Divergence",
+    formula: "12 EMA, 26 EMA, 9 Signal Line + Histogram",
+  },
+  {
+    id: "stochrsi",
+    name: "Stochastic RSI",
+    category: "Oscillator",
+    shortDesc: "Stochastic applied to RSI for rapid cyclical turns",
+    formula: "14, 14, 3, 3 with 80/20 shaded reference bounds",
+  },
+];
 
 /** Shape of the memoised indicator values. */
 export type ComputedValues = {

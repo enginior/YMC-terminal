@@ -40,7 +40,9 @@ components/
 ├── chart/                  # Chart submodules (modularized via Spec 005)
 │   ├── types.ts            # Chart types, indicator configs, timeframes, math helpers
 │   ├── ChartTypeIcon.tsx   # Candles / Heikin Ashi / Line SVG icons
-│   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicators, drawings, exports)
+│   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicator modal trigger, exports)
+│   ├── DrawingRail.tsx     # Left vertical drawing toolbar with grouped flyouts & actions (Spec 006)
+│   ├── IndicatorsModal.tsx # ƒx Indicators search & toggle modal dialog (Spec 006)
 │   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
 │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
 │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag

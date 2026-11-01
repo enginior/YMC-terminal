@@ -37,6 +37,7 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | 004 | [Per-symbol alert evaluation & live universe tickers](./004-per-symbol-alerts.md) | Done |
 | 014 | [Test suite & GitHub Actions CI](./014-tests-lint-ci.md) | Done |
 | 005 | [Chart modularization refactor](./005-chart-refactor.md) | Done |
+| 006 | [TradingView-style layout & drawing rail](./006-tradingview-layout.md) | Done |
 
 **Recommended order:** 000 → 001 → 002 → 003 (the two small filters first, so the
 large `page.tsx` refactor in 003 lands last and doesn't conflict).

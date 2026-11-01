@@ -48,6 +48,10 @@ export function useDrawings({
 }: UseDrawingsOptions) {
   const [drawMode, setDrawMode] = useState<DrawMode>("none");
   const [magnetOn, setMagnetOn] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
+  const [lastLineTool, setLastLineTool] = useState<"trend" | "level">("trend");
+  const [lastShapeTool, setLastShapeTool] = useState<"rect">("rect");
   const [drawingsBySymbol, setDrawingsBySymbol] = useState<Record<string, Drawing[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -70,6 +74,8 @@ export function useDrawings({
     symbol,
     magnetOn,
     chartType,
+    isLocked,
+    isHidden,
   });
   stateRef.current = {
     drawMode,
@@ -80,6 +86,8 @@ export function useDrawings({
     symbol,
     magnetOn,
     chartType,
+    isLocked,
+    isHidden,
   };
 
   const removeDrawingById = useCallback((id: string) => {
@@ -146,6 +154,7 @@ export function useDrawings({
     drawingsPrimRef.current = drawingsPrim;
 
     const topmostAt = (p: { x: number; y: number }): string | null => {
+      if (stateRef.current.isLocked || stateRef.current.isHidden) return null;
       const list = stateRef.current.drawings;
       for (let i = list.length - 1; i >= 0; i--) {
         if (hitTestDrawing(list[i], p, chart, series, undefined, stateRef.current.candles)) {
@@ -195,6 +204,7 @@ export function useDrawings({
 
     const onClick = (param: any) => {
       if ((param.paneIndex ?? 0) !== 0) return;
+      if (stateRef.current.isLocked || stateRef.current.isHidden) return;
       if (stateRef.current.drawMode !== "none" || !param.point) return;
       const p = param.point;
 
@@ -229,18 +239,20 @@ export function useDrawings({
     const prim = drawingsPrimRef.current;
     if (!prim) return;
     prim.setStyle({ labelBg: theme.panel });
+    prim.setHidden(isHidden);
     prim.setDrawings(drawings);
     prim.setCandles(snapCandles);
     prim.setInteraction(hoveredRef.current, selectedRef.current);
-  }, [drawings, theme, snapCandles]);
+  }, [drawings, theme, snapCandles, isHidden]);
 
-  // Drop selection when symbol changes
+  // Drop selection when symbol changes, or when drawings are locked or hidden
   useEffect(() => {
     selectedRef.current = null;
     hoveredRef.current = null;
     setSelectedId(null);
     drawingsPrimRef.current?.setInteraction(null, null);
-  }, [symbol]);
+    if (containerRef.current) containerRef.current.style.cursor = "default";
+  }, [symbol, isLocked, isHidden, containerRef]);
 
   // Toggling magnet off releases snapped crosshair
   useEffect(() => {
@@ -439,6 +451,14 @@ export function useDrawings({
     setDrawMode,
     magnetOn,
     setMagnetOn,
+    isLocked,
+    setIsLocked,
+    isHidden,
+    setIsHidden,
+    lastLineTool,
+    setLastLineTool,
+    lastShapeTool,
+    setLastShapeTool,
     drawings,
     selectedId,
     removeDrawingById,

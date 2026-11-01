@@ -11,6 +11,7 @@ import {
   SESSION_HL_KEY,
 } from "./chart/types";
 import { ChartHeader } from "./chart/ChartHeader";
+import { DrawingRail } from "./chart/DrawingRail";
 import { useChartInstance } from "./chart/useChartInstance";
 import { useIndicatorPanes } from "./chart/useIndicatorPanes";
 import { useDrawings } from "./chart/useDrawings";
@@ -133,6 +134,12 @@ function PriceChart({
     setDrawMode,
     magnetOn,
     setMagnetOn,
+    isLocked,
+    setIsLocked,
+    isHidden,
+    setIsHidden,
+    lastLineTool,
+    setLastLineTool,
     drawings,
     selectedId,
     removeDrawingById,
@@ -214,14 +221,8 @@ function PriceChart({
         onToggleSessionHL={() => setShowSessionHL((v) => !v)}
         activeIndicators={activeIndicators}
         onToggleIndicator={toggleIndicator}
-        magnetOn={magnetOn}
-        onToggleMagnet={() => setMagnetOn((v) => !v)}
         drawMode={drawMode}
         onSetDrawMode={setDrawMode}
-        drawingsCount={drawings.length}
-        onClearDrawings={clearDrawings}
-        selectedId={selectedId}
-        onDeleteSelected={() => selectedId && removeDrawingById(selectedId)}
         candlesCount={candles.length}
         candleError={candleError}
         onExportPng={exportPng}
@@ -230,38 +231,63 @@ function PriceChart({
         isMaximized={isMaximized}
       />
 
-      <div className="relative flex-1 w-full min-h-0 overflow-hidden">
-        {/* Counter-scale the chart pane. The app wraps everything in
-            `transform: scale(--ui-scale)`, but lightweight-charts measures its
-            size from the transformed rect and then treats pointer coords
-            (`clientX - rect.left`) as its own space — so under a scale it lays
-            out a 1.05x backing store and maps the crosshair/drawings ~5% off.
-            Scaling this wrapper by 1/scale (and growing it by scale so it still
-            fills the pane) makes the net transform on the chart identity, so the
-            library's coordinates line up with the cursor again. */}
-        <div
-          className="absolute left-0 top-0"
-          style={{
-            width: "calc(100% * var(--ui-scale))",
-            height: "calc(100% * var(--ui-scale))",
-            transform: "scale(calc(1 / var(--ui-scale)))",
-            transformOrigin: "top left",
+      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+        {/* Left Vertical Drawing Rail */}
+        <DrawingRail
+          drawMode={drawMode}
+          onSetDrawMode={setDrawMode}
+          lastLineTool={lastLineTool}
+          onSelectLineTool={(tool) => {
+            setLastLineTool(tool);
+            setDrawMode((current) => (current === tool ? "none" : tool));
+            if (isHidden) setIsHidden(false);
           }}
-        >
-          <div ref={containerRef} className="absolute inset-0" />
+          magnetOn={magnetOn}
+          onToggleMagnet={() => setMagnetOn((v) => !v)}
+          isLocked={isLocked}
+          onToggleLocked={() => setIsLocked((v) => !v)}
+          isHidden={isHidden}
+          onToggleHidden={() => setIsHidden((v) => !v)}
+          drawingsCount={drawings.length}
+          onClearDrawings={clearDrawings}
+          selectedId={selectedId}
+          onDeleteSelected={() => selectedId && removeDrawingById(selectedId)}
+        />
 
-          {/* Input catcher: only mounted while a tool is active, so it never
-              interferes with panning, the crosshair, or tooltips. */}
-          {drawMode !== "none" && (
-            <div
-              className="absolute inset-0 z-10"
-              style={{ cursor: "crosshair", touchAction: "none", userSelect: "none" }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            />
-          )}
+        {/* Chart Canvas Area */}
+        <div className="relative flex-1 min-w-0 h-full overflow-hidden">
+          {/* Counter-scale the chart pane. The app wraps everything in
+              `transform: scale(--ui-scale)`, but lightweight-charts measures its
+              size from the transformed rect and then treats pointer coords
+              (`clientX - rect.left`) as its own space — so under a scale it lays
+              out a 1.05x backing store and maps the crosshair/drawings ~5% off.
+              Scaling this wrapper by 1/scale (and growing it by scale so it still
+              fills the pane) makes the net transform on the chart identity, so the
+              library's coordinates line up with the cursor again. */}
+          <div
+            className="absolute left-0 top-0"
+            style={{
+              width: "calc(100% * var(--ui-scale))",
+              height: "calc(100% * var(--ui-scale))",
+              transform: "scale(calc(1 / var(--ui-scale)))",
+              transformOrigin: "top left",
+            }}
+          >
+            <div ref={containerRef} className="absolute inset-0" />
+
+            {/* Input catcher: only mounted while a tool is active, so it never
+                interferes with panning, the crosshair, or tooltips. */}
+            {drawMode !== "none" && (
+              <div
+                className="absolute inset-0 z-10"
+                style={{ cursor: "crosshair", touchAction: "none", userSelect: "none" }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

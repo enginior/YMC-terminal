@@ -185,6 +185,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
   private draft: Drawing | null = null;
   private hoveredId: string | null = null;
   private selectedId: string | null = null;
+  private hidden: boolean = false;
   private style: DrawingsStyle = { labelBg: "#111111" };
   private candles: { time: number }[] = [];
   private readonly views: IPrimitivePaneView[];
@@ -222,6 +223,12 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate();
   }
 
+  setHidden(hidden: boolean): void {
+    if (this.hidden === hidden) return;
+    this.hidden = hidden;
+    this.requestUpdate();
+  }
+
   attached(param: SeriesAttachedParameter<Time>): void {
     this.chart = param.chart;
     this.series = param.series as ISeriesApi<"Candlestick">;
@@ -245,8 +252,8 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     if (!chart || !series) return;
 
     const items: Drawing[] = this.draft
-      ? [...this.drawings, this.draft]
-      : this.drawings;
+      ? (this.hidden ? [this.draft] : [...this.drawings, this.draft])
+      : (this.hidden ? [] : this.drawings);
     if (items.length === 0) return;
 
     target.useBitmapCoordinateSpace((scope) => {

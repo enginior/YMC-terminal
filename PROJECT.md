@@ -42,7 +42,9 @@ ymc-terminal/
 │   ├── chart/                  # Chart submodules (modularized via Spec 005)
 │   │   ├── types.ts            # Chart types, indicator configs, timeframes, math helpers
 │   │   ├── ChartTypeIcon.tsx   # Candles / Heikin Ashi / Line SVG icons
-│   │   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicators, drawings, exports)
+│   │   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicator modal trigger, exports)
+│   │   ├── DrawingRail.tsx     # Left vertical drawing toolbar with grouped flyouts & actions (Spec 006)
+│   │   ├── IndicatorsModal.tsx # ƒx Indicators search & toggle modal dialog (Spec 006)
 │   │   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
 │   │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
 │   │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag
@@ -100,6 +102,9 @@ ymc-terminal/
 - Panel Maximize / Solo Focus mode (`f` key or `⤢` panel header icon)
 - Command bar action parser (`BTC 15M`, `ALERT 75000`, `THEME MATRIX`, `CLEAR`, `FULL`, `GRID`)
 - Volume bars with toggle
+- TradingView-style workstation layout: left vertical drawing rail (`DrawingRail.tsx`) with grouped flyouts (Lines, Shapes, Measure), tool memory, and bottom utilities (Magnet, Lock, Hide, Clear, Delete selected)
+- `ƒx Indicators` search and toggle modal dialog (`IndicatorsModal.tsx`) with real-time query filtering, categorized Overlays and Oscillators, and instant chart toggles
+- Top toolbar (`ChartHeader.tsx`) with favorite timeframes quick-strip (`1m 5m 15m 1h 4h 1d`) + secondary interval dropdown (`30m 2h`), visual style picker, and overlay controls
 - Technical indicators: SMA 20/50, EMA 20/50, Bollinger (20,2), RSI (14), MACD (12,26,9), Stoch RSI (14,14,3,3)
 - RSI and MACD render in their own sub-panes below the price chart (lightweight-charts
   v5 native panes) with independent right-side value scales and a draggable divider
@@ -110,7 +115,7 @@ ymc-terminal/
   preview; persisted per symbol (localStorage), clear-all, Esc to cancel. Click a
   drawing to select it (hover highlights, cursor becomes a pointer), then delete
   it individually via the ✕ handle on the drawing, the toolbar's ✕ Delete button,
-  or the Delete/Backspace key; click empty space to deselect.
+  or the Delete/Backspace key; click empty space to deselect. Includes lock mode and hide/unhide mode.
 - Magnet mode (🧲 toggle): snaps the crosshair and drawing anchors to the nearest
   OHLC value of the hovered candle; off restores free, pixel-accurate movement.
 - Broker-style broken UTC day separators (DAY toggle) rendered between candles
