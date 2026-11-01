@@ -3,6 +3,8 @@
 import { memo, useEffect, useRef, useState, useMemo } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { AssetIcon } from "@/components/AssetIcon";
+import { toBinanceSymbol } from "@/lib/symbols";
+import { useMarket } from "@/lib/marketStore";
 
 interface SymbolData {
   symbol: string;
@@ -168,6 +170,7 @@ function getHeatmapColor(changePercent: number): { bg: string; border: string } 
 
 function MarketHeatmapPanel({ onSelect, selected }: MarketHeatmapPanelProps) {
   const { theme } = useTheme();
+  const tickers = useMarket((s) => s.tickers);
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<SymbolData[]>([]);
   const [failed, setFailed] = useState(false);
@@ -268,12 +271,15 @@ function MarketHeatmapPanel({ onSelect, selected }: MarketHeatmapPanelProps) {
           const isMedium = (tile.w >= 45 && tile.h >= 36) || isBig;
           const isCompact = !isMedium;
 
+          const bSym = toBinanceSymbol(tile.symbol) ?? tile.symbol.toUpperCase().replace(/[\/\s]/g, "");
+          const livePrice = tickers[bSym] ?? tickers[tile.symbol] ?? tile.price;
+
           return (
             <div
               key={tile.symbol}
               onClick={() => onSelect?.(tile.symbol)}
-              title={`${tile.symbol}\nPrice: $${tile.price.toLocaleString("en-US", {
-                maximumFractionDigits: tile.price < 1 ? 4 : 2,
+              title={`${tile.symbol}\nPrice: $${livePrice.toLocaleString("en-US", {
+                maximumFractionDigits: livePrice < 1 ? 4 : 2,
               })}\n24h Change: ${tile.changePercent >= 0 ? "+" : ""}${tile.changePercent.toFixed(
                 2
               )}%\n24h Volume: ${tile.volume}\nClick to chart`}
@@ -305,9 +311,9 @@ function MarketHeatmapPanel({ onSelect, selected }: MarketHeatmapPanelProps) {
                     {tile.changePercent.toFixed(2)}%
                   </span>
                   <span className="text-[9px] text-white/80 tabular-nums font-mono mt-0.5">
-                    ${tile.price >= 1000
-                      ? tile.price.toLocaleString("en-US", { maximumFractionDigits: 0 })
-                      : tile.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                    ${livePrice >= 1000
+                      ? livePrice.toLocaleString("en-US", { maximumFractionDigits: 0 })
+                      : livePrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                   </span>
                 </>
               ) : isMedium ? (

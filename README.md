@@ -122,7 +122,7 @@ npm run start     # serve the production build on port 3030
 app/         Next.js routes, layout, global styles, and the /api route handlers
 components/  UI panels (chart, watchlist, heatmap, order book, alerts, settings, ...)
 context/     ThemeContext — colours, presets, saved palettes
-hooks/       useMultiExchangeData (sockets + candles), useAlerts
+hooks/       useMultiExchangeData (sockets, candles, universe tickers), useAlerts (per-symbol, sound, desktop)
 lib/         indicators, heikenAshi, symbol mapping, chart series primitives, types
 ```
 

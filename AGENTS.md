@@ -53,8 +53,8 @@ components/
 context/
 └── ThemeContext.tsx        # 15-color theme, presets, localStorage persistence
 hooks/
-├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + candles
-└── useAlerts.ts            # Alert evaluation, sound, persistence
+├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + klines + universe !miniTicker@arr
+└── useAlerts.ts            # Per-symbol alert evaluation, sound, browser Notification API, persistence
 lib/
 ├── types.ts                # Candle, Trade, OrderBookEntry, WatchlistItem
 ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)
@@ -96,6 +96,7 @@ lib/
 | Provider | Used For | Endpoint |
 |----------|----------|----------|
 | Binance WebSocket | Trades, order book, klines | `wss://stream.binance.com:9443/ws` |
+| Binance Spot & Futures Tickers | Live 24hr universe tickers (`!miniTicker@arr`) | `wss://stream.binance.com:9443/ws/!miniTicker@arr`, `wss://fstream.binance.com/ws/!miniTicker@arr` |
 | Coinbase WebSocket | Trades (price aggregate) | `wss://ws-feed.exchange.coinbase.com` |
 | OKX WebSocket | Trades (price aggregate) | `wss://ws.okx.com:8443/ws/v5/public` |
 | Bybit WebSocket | Trades (price aggregate) | `wss://stream.bybit.com/v5/public/spot` |

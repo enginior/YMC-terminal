@@ -14,6 +14,7 @@ interface AlertsPanelProps {
   prefs: AlertPrefs;
   onPrefsChange: (patch: Partial<AlertPrefs>) => void;
   onEnableSound: () => boolean;
+  onRequestDesktopNotification?: () => Promise<boolean>;
 }
 
 function AlertsPanel({
@@ -25,6 +26,7 @@ function AlertsPanel({
   prefs,
   onPrefsChange,
   onEnableSound,
+  onRequestDesktopNotification,
 }: AlertsPanelProps) {
   const { theme } = useTheme();
   const storePrice = useMarket((s) => s.price);
@@ -160,6 +162,32 @@ function AlertsPanel({
           title={prefs.sound ? "Alert sound on" : "Alert sound off — click to enable"}
         >
           {prefs.sound ? "♪ ON" : "♪ OFF"}
+        </button>
+
+        <button
+          onClick={async () => {
+            if (!prefs.desktop) {
+              if (onRequestDesktopNotification) {
+                await onRequestDesktopNotification();
+              } else {
+                onPrefsChange({ desktop: true });
+              }
+            } else {
+              onPrefsChange({ desktop: false });
+            }
+          }}
+          className="text-[9px] px-1 py-0.5 rounded border hover:opacity-70"
+          style={{
+            borderColor: theme.border,
+            color: prefs.desktop ? theme.yellow : theme.dim,
+          }}
+          title={
+            prefs.desktop
+              ? "Desktop notifications on — click to disable"
+              : "Desktop notifications off — click to enable"
+          }
+        >
+          {prefs.desktop ? "DESK ON" : "DESK OFF"}
         </button>
 
         <input

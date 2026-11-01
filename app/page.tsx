@@ -172,6 +172,7 @@ export default function Home() {
     prefs,
     updatePrefs,
     primeAudio,
+    requestDesktopNotification,
   } = useAlerts();
 
   // Real 24hr stats from Binance
@@ -242,6 +243,7 @@ export default function Home() {
             prefs={prefs}
             onPrefsChange={updatePrefs}
             onEnableSound={primeAudio}
+            onRequestDesktopNotification={requestDesktopNotification}
           />
         );
         break;
@@ -295,6 +297,7 @@ export default function Home() {
             prefs={prefs}
             onPrefsChange={updatePrefs}
             onEnableSound={primeAudio}
+            onRequestDesktopNotification={requestDesktopNotification}
           />
         );
       case "sentiment":
@@ -448,6 +451,7 @@ export default function Home() {
               prefs={prefs}
               onPrefsChange={updatePrefs}
               onEnableSound={primeAudio}
+              onRequestDesktopNotification={requestDesktopNotification}
             />
           </div>
 

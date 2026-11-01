@@ -3,8 +3,9 @@
 import { memo, useEffect, useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { WatchlistItem } from "@/lib/types";
-import { isChartable } from "@/lib/symbols";
+import { isChartable, toBinanceSymbol } from "@/lib/symbols";
 import { AssetIcon } from "@/components/AssetIcon";
+import { useMarket } from "@/lib/marketStore";
 
 interface WatchlistProps {
   selected?: string;
@@ -15,6 +16,7 @@ type SortMode = "default" | "change" | "volume" | "name";
 
 function Watchlist({ selected, onSelect }: WatchlistProps) {
   const { theme } = useTheme();
+  const tickers = useMarket((s) => s.tickers);
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [failed, setFailed] = useState(false);
@@ -121,6 +123,9 @@ function Watchlist({ selected, onSelect }: WatchlistProps) {
           const max = pts.length ? Math.max(...pts) : 1;
           const range = max - min || 1;
 
+          const bSym = toBinanceSymbol(item.symbol) ?? item.symbol.toUpperCase().replace(/[\/\s]/g, "");
+          const livePrice = tickers[bSym] ?? tickers[item.symbol] ?? item.price;
+
           return (
             <div
               key={item.symbol}
@@ -156,10 +161,10 @@ function Watchlist({ selected, onSelect }: WatchlistProps) {
                 </div>
                 <span
                   className="text-[11px] tabular-nums shrink-0 font-medium"
-                  style={{ color: item.price > 0 ? theme.text : theme.dim }}
+                  style={{ color: livePrice > 0 ? theme.text : theme.dim }}
                 >
-                  {item.price > 0
-                    ? "$" + item.price.toLocaleString("en-US", { maximumFractionDigits: item.price < 1 ? 4 : 2 })
+                  {livePrice > 0
+                    ? "$" + livePrice.toLocaleString("en-US", { maximumFractionDigits: livePrice < 1 ? 4 : 2 })
                     : "—"}
                 </span>
               </div>

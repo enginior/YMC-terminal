@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { Trade, OrderBookEntry } from "@/lib/types";
-import { isFuturesSymbol } from "@/lib/symbols";
+import { isFuturesSymbol, UNIVERSE, toLabel } from "@/lib/symbols";
 import { marketStore, ExchangeData } from "@/lib/marketStore";
 
 const RECONNECT_MS = 3000;
@@ -139,10 +139,135 @@ const EXCHANGES = [
 ] as const;
 
 /**
+ * Global WebSocket stream for all universe symbols.
+ * Connects to Binance Spot and Binance Futures !miniTicker@arr.
+ * Keeps marketStore.tickers fresh across all pairs so alerts can evaluate
+ * against any asset even when it is not the active chart symbol.
+ */
+function useUniverseTickersFeed() {
+  useEffect(() => {
+    let spotWs: WebSocket | null = null;
+    let futuresWs: WebSocket | null = null;
+    let spotTimer: NodeJS.Timeout | null = null;
+    let futuresTimer: NodeJS.Timeout | null = null;
+    let disposed = false;
+
+    const UNIVERSE_SYMBOLS = new Set(UNIVERSE.map((u) => u.symbol));
+
+    const connectSpot = () => {
+      if (disposed) return;
+      try {
+        spotWs = new WebSocket("wss://stream.binance.com:9443/ws/!miniTicker@arr");
+        spotWs.onmessage = (event) => {
+          try {
+            const arr = JSON.parse(event.data);
+            if (Array.isArray(arr)) {
+              const updates: Record<string, number> = {};
+              for (const item of arr) {
+                if (item && item.s && (UNIVERSE_SYMBOLS.has(item.s) || item.s.endsWith("USDT"))) {
+                  const p = parseFloat(item.c);
+                  if (!isNaN(p) && p > 0) {
+                    updates[item.s] = p;
+                    const lbl = toLabel(item.s);
+                    if (lbl && lbl !== item.s) {
+                      updates[lbl] = p;
+                    }
+                  }
+                }
+              }
+              if (Object.keys(updates).length > 0) {
+                const prev = marketStore.getState().tickers;
+                marketStore.setState({ tickers: { ...prev, ...updates } });
+              }
+            }
+          } catch {}
+        };
+        spotWs.onclose = () => {
+          if (!disposed) {
+            spotTimer = setTimeout(connectSpot, RECONNECT_MS);
+          }
+        };
+        spotWs.onerror = () => {
+          spotWs?.close();
+        };
+      } catch {
+        if (!disposed) {
+          spotTimer = setTimeout(connectSpot, RECONNECT_MS);
+        }
+      }
+    };
+
+    const connectFutures = () => {
+      if (disposed) return;
+      try {
+        futuresWs = new WebSocket("wss://fstream.binance.com/ws/!miniTicker@arr");
+        futuresWs.onmessage = (event) => {
+          try {
+            const arr = JSON.parse(event.data);
+            if (Array.isArray(arr)) {
+              const updates: Record<string, number> = {};
+              for (const item of arr) {
+                if (item && item.s && isFuturesSymbol(item.s)) {
+                  const p = parseFloat(item.c);
+                  if (!isNaN(p) && p > 0) {
+                    updates[item.s] = p;
+                    const lbl = toLabel(item.s);
+                    if (lbl && lbl !== item.s) {
+                      updates[lbl] = p;
+                    }
+                  }
+                }
+              }
+              if (Object.keys(updates).length > 0) {
+                const prev = marketStore.getState().tickers;
+                marketStore.setState({ tickers: { ...prev, ...updates } });
+              }
+            }
+          } catch {}
+        };
+        futuresWs.onclose = () => {
+          if (!disposed) {
+            futuresTimer = setTimeout(connectFutures, RECONNECT_MS);
+          }
+        };
+        futuresWs.onerror = () => {
+          futuresWs?.close();
+        };
+      } catch {
+        if (!disposed) {
+          futuresTimer = setTimeout(connectFutures, RECONNECT_MS);
+        }
+      }
+    };
+
+    connectSpot();
+    connectFutures();
+
+    return () => {
+      disposed = true;
+      if (spotTimer) clearTimeout(spotTimer);
+      if (futuresTimer) clearTimeout(futuresTimer);
+      if (spotWs) {
+        spotWs.onclose = null;
+        spotWs.onerror = null;
+        spotWs.close();
+      }
+      if (futuresWs) {
+        futuresWs.onclose = null;
+        futuresWs.onerror = null;
+        futuresWs.close();
+      }
+    };
+  }, []);
+}
+
+/**
  * Feeds live market data into marketStore outside React state.
  * Never causes the caller (Home) to re-render.
  */
 export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
+  useUniverseTickersFeed();
+
   const socketsRef = useRef<WebSocket[]>([]);
   const retryRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const tradeIdRef = useRef(0);
@@ -350,7 +475,8 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
     return () => clearInterval(id);
   }, [symbol, interval]);
 
-  // 1 Hz price throttle: copies aggregatedPrice -> price and derives direction
+  // 1 Hz price throttle: copies aggregatedPrice -> price and derives direction,
+  // and keeps tickers updated with the active symbol's multi-exchange aggregated price.
   useEffect(() => {
     const timer = setInterval(() => {
       const cur = marketStore.getState().aggregatedPrice;
@@ -358,12 +484,21 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
         const prev = marketStore.getState().price;
         const direction: "up" | "down" =
           prev === 0 ? "up" : cur >= prev ? "up" : "down";
-        marketStore.setState({ price: cur, direction });
+        const currentTickers = marketStore.getState().tickers;
+        marketStore.setState({
+          price: cur,
+          direction,
+          tickers: {
+            ...currentTickers,
+            [symbol]: cur,
+            [toLabel(symbol)]: cur,
+          },
+        });
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [symbol]);
 }
 
 /** Legacy compatibility export */

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { marketStore } from "@/lib/marketStore";
+import { toBinanceSymbol, toLabel } from "@/lib/symbols";
 
 export interface PriceAlert {
   id: number;
@@ -19,16 +20,16 @@ const PREFS_KEY = "btc-terminal:alert-prefs";
 export interface AlertPrefs {
   sound: boolean;
   volume: number;
+  desktop: boolean;
 }
 
-const DEFAULT_PREFS: AlertPrefs = { sound: true, volume: 0.25 };
+const DEFAULT_PREFS: AlertPrefs = { sound: true, volume: 0.25, desktop: false };
 
 export function useAlerts(explicitPrice?: number) {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [showNotification, setShowNotification] = useState<PriceAlert | null>(null);
   const [prefs, setPrefs] = useState<AlertPrefs>(DEFAULT_PREFS);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const lastEvaluatedPriceRef = useRef(0);
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
   const prefsRef = useRef(prefs);
@@ -59,6 +60,7 @@ export function useAlerts(explicitPrice?: number) {
             typeof parsed.volume === "number" && parsed.volume >= 0 && parsed.volume <= 1
               ? parsed.volume
               : DEFAULT_PREFS.volume,
+          desktop: typeof parsed.desktop === "boolean" ? parsed.desktop : DEFAULT_PREFS.desktop,
         });
       }
     } catch {
@@ -134,27 +136,97 @@ export function useAlerts(explicitPrice?: number) {
     }
   }, [prefs.volume]);
 
-  // Evaluate alerts imperatively on store updates (or explicitPrice if provided)
-  // so Home does not need to subscribe or pass down price.
+  const requestDesktopNotification = useCallback(async (): Promise<boolean> => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return false;
+    }
+    if (Notification.permission === "granted") {
+      setPrefs((prev) => ({ ...prev, desktop: true }));
+      return true;
+    }
+    if (Notification.permission !== "denied") {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          setPrefs((prev) => ({ ...prev, desktop: true }));
+          return true;
+        }
+      } catch {
+        return false;
+      }
+    }
+    setPrefs((prev) => ({ ...prev, desktop: false }));
+    return false;
+  }, []);
+
+  const spawnDesktopNotification = useCallback((alert: PriceAlert) => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      Notification.permission !== "granted"
+    ) {
+      return;
+    }
+    try {
+      const symbolLabel = toLabel(alert.symbol);
+      const op = alert.condition === "above" ? "≥" : "≤";
+      const formattedPrice = alert.price.toLocaleString("en-US", {
+        maximumFractionDigits: alert.price < 1 ? 4 : 2,
+      });
+      new Notification(`PRICE ALERT: ${symbolLabel}`, {
+        body: `${symbolLabel} reached ${op} $${formattedPrice}`,
+        icon: "/icon.svg",
+      });
+    } catch {
+      /* desktop notifications blocked or unsupported */
+    }
+  }, []);
+
+  // Evaluate alerts imperatively on store updates (per-symbol evaluation)
   useEffect(() => {
-    const evaluate = (currentPrice: number) => {
-      if (currentPrice <= 0 || currentPrice === lastEvaluatedPriceRef.current) return;
-      lastEvaluatedPriceRef.current = currentPrice;
-
+    const evaluate = (explicitP?: number) => {
+      const state = marketStore.getState();
+      const tickers = state.tickers;
       const currentAlerts = alertsRef.current;
-      const hit = currentAlerts.find(
-        (a) =>
-          a.active &&
-          !a.triggered &&
-          ((a.condition === "above" && currentPrice >= a.price) ||
-            (a.condition === "below" && currentPrice <= a.price))
-      );
-      if (!hit) return;
+      if (currentAlerts.length === 0) return;
 
+      const triggeredAlerts: PriceAlert[] = [];
+
+      for (const a of currentAlerts) {
+        if (!a.active || a.triggered) continue;
+
+        const bSymbol = toBinanceSymbol(a.symbol) || a.symbol.toUpperCase().replace(/[\/\s]/g, "");
+        let symPrice = tickers[bSymbol] ?? tickers[a.symbol];
+
+        // Fallback: if alert is for active chart symbol and not in tickers yet, use state.price or explicitP
+        if (
+          (!symPrice || symPrice <= 0) &&
+          (state.symbol === bSymbol || toLabel(state.symbol) === a.symbol)
+        ) {
+          symPrice = typeof explicitP === "number" && explicitP > 0 ? explicitP : state.price;
+        }
+
+        if (!symPrice || symPrice <= 0) continue;
+
+        const isHit =
+          (a.condition === "above" && symPrice >= a.price) ||
+          (a.condition === "below" && symPrice <= a.price);
+
+        if (isHit) {
+          triggeredAlerts.push(a);
+        }
+      }
+
+      if (triggeredAlerts.length === 0) return;
+
+      const hit = triggeredAlerts[0];
       if (prefsRef.current.sound) playAlertSound();
+      if (prefsRef.current.desktop) spawnDesktopNotification(hit);
       setShowNotification({ ...hit, triggered: true });
+
+      const hitIds = new Set(triggeredAlerts.map((a) => a.id));
       setAlerts((prev) =>
-        prev.map((a) => (a.id === hit.id ? { ...a, triggered: true, active: false } : a))
+        prev.map((a) => (hitIds.has(a.id) ? { ...a, triggered: true, active: false } : a))
       );
     };
 
@@ -163,12 +235,11 @@ export function useAlerts(explicitPrice?: number) {
     }
 
     const unsubscribe = marketStore.subscribe(() => {
-      const p = marketStore.getState().price;
-      evaluate(p);
+      evaluate();
     });
 
     return unsubscribe;
-  }, [explicitPrice, playAlertSound]);
+  }, [explicitPrice, playAlertSound, spawnDesktopNotification]);
 
   const addAlert = useCallback((symbol: string, condition: "above" | "below", price: number) => {
     setAlerts((prev) => [
@@ -200,5 +271,6 @@ export function useAlerts(explicitPrice?: number) {
     prefs,
     updatePrefs,
     primeAudio,
+    requestDesktopNotification,
   };
 }

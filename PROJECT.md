@@ -56,8 +56,8 @@ ymc-terminal/
 ├── context/
 │   └── ThemeContext.tsx        # 15-color theme, presets, saved palettes
 ├── hooks/
-│   ├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + candles
-│   └── useAlerts.ts            # Alert evaluation, sound, persistence
+│   ├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + klines + universe !miniTicker@arr
+│   └── useAlerts.ts            # Per-symbol alert evaluation, sound, browser Notification API, persistence
 ├── lib/
 │   ├── types.ts                # Candle, Trade, OrderBookEntry, WatchlistItem
 │   ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)

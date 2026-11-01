@@ -23,6 +23,7 @@ export interface MarketState {
   direction: "up" | "down";
   connected: boolean;
   exchangeCount: number;
+  tickers: Record<string, number>;
 }
 
 export const INITIAL_MARKET_STATE: MarketState = {
@@ -43,6 +44,7 @@ export const INITIAL_MARKET_STATE: MarketState = {
   direction: "up",
   connected: false,
   exchangeCount: 0,
+  tickers: {},
 };
 
 let state: MarketState = { ...INITIAL_MARKET_STATE };
@@ -61,9 +63,6 @@ function scheduleNotify() {
   dirty = true;
   if (typeof window !== "undefined" && rafId === null) {
     rafId = requestAnimationFrame(notify);
-  } else if (typeof window === "undefined" && !dirty) {
-    dirty = false;
-    listeners.forEach((listener) => listener());
   }
 }
 
@@ -108,6 +107,7 @@ export const marketStore = {
       ...INITIAL_MARKET_STATE,
       symbol,
       interval,
+      tickers: state.tickers,
       venues: [
         { name: "Binance", price: 0, connected: false, lastUpdate: 0 },
         { name: "Coinbase", price: 0, connected: false, lastUpdate: 0 },
@@ -148,17 +148,27 @@ export function useMarket<T>(
 ): T {
   const lastSelectedRef = useRef<T | undefined>(undefined);
   const lastStateRef = useRef<MarketState | undefined>(undefined);
+  const lastSelectorRef = useRef<((state: MarketState) => T) | undefined>(undefined);
 
   const getSnapshot = () => {
     const currentState = marketStore.getState();
-    if (lastStateRef.current === currentState && lastSelectedRef.current !== undefined) {
+    if (
+      lastStateRef.current === currentState &&
+      lastSelectorRef.current === selector &&
+      lastSelectedRef.current !== undefined
+    ) {
       return lastSelectedRef.current;
     }
     const nextSelected = selector(currentState);
-    if (lastSelectedRef.current !== undefined && isEqual(lastSelectedRef.current, nextSelected)) {
+    if (
+      lastSelectorRef.current === selector &&
+      lastSelectedRef.current !== undefined &&
+      isEqual(lastSelectedRef.current, nextSelected)
+    ) {
       return lastSelectedRef.current;
     }
     lastStateRef.current = currentState;
+    lastSelectorRef.current = selector;
     lastSelectedRef.current = nextSelected;
     return nextSelected;
   };

@@ -34,6 +34,7 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | 001 | [News symbol tagging & active-asset filter](./001-news-symbol-filter.md) | Done |
 | 002 | [Calendar impact & currency filter](./002-calendar-impact-currency-filter.md) | Done |
 | 003 | [Reactive tick store (render isolation)](./003-reactive-tick-store.md) | Done |
+| 004 | [Per-symbol alert evaluation & live universe tickers](./004-per-symbol-alerts.md) | Done |
 
 **Recommended order:** 000 → 001 → 002 → 003 (the two small filters first, so the
 large `page.tsx` refactor in 003 lands last and doesn't conflict).
