@@ -12,6 +12,7 @@ Bloomberg Terminal-style Next.js workstation for BTC/USDT and perpetual crypto d
 ## Commands
 - `npm run dev` — start dev server (localhost:3030)
 - `npm run typecheck` — type-check TypeScript without building (`tsc --noEmit`)
+- `npm run test` — run unit test suite with Vitest (`vitest run`)
 - `npm run build` — production build (type-checks and compiles)
 
 ## Architecture

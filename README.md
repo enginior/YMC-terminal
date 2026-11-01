@@ -92,6 +92,7 @@ The app runs on port **3030**.
 
 ```bash
 npm run typecheck # type-check TypeScript without building (tsc --noEmit)
+npm run test      # run unit test suite with Vitest (vitest run)
 npm run build     # production build (also type-checks)
 npm run start     # serve the production build on port 3030
 ```

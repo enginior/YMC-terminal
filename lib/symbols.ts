@@ -72,7 +72,8 @@ export function toBinanceSymbol(label: string): string | null {
   if (ALIASES[upper]) return ALIASES[upper];
   const direct = BY_LABEL.get(upper);
   if (direct) return direct;
-  return BY_SYMBOL.get(upper) ?? (upper.endsWith("USDT") ? upper : null);
+  if (BY_SYMBOL.has(upper)) return upper;
+  return upper.endsWith("USDT") ? upper : null;
 }
 
 /** "XAUUSDT" -> "XAU/USDT". */
