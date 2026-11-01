@@ -36,7 +36,14 @@ components/
 ├── CommandBar.tsx          # Top bar: logo, search, settings, clock
 ├── Watchlist.tsx           # Left sidebar symbol list with inline 24h sparklines and sorting
 ├── MarketStats.tsx         # 24hr strip (real ticker, mark price, basis spread, live/offline dot)
-├── PriceChart.tsx          # Candles/Heikin-Ashi/Line visuals, indicators, sub-panes, drawing tools, session H/L
+├── PriceChart.tsx          # Candlestick chart orchestrator (delegates to components/chart/)
+├── chart/                  # Chart submodules (modularized via Spec 005)
+│   ├── types.ts            # Chart types, indicator configs, timeframes, math helpers
+│   ├── ChartTypeIcon.tsx   # Candles / Heikin Ashi / Line SVG icons
+│   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicators, drawings, exports)
+│   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
+│   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
+│   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag
 ├── OrderBook.tsx           # Bid/ask ladder
 ├── TradeTape.tsx           # Time & sales
 ├── LiquidationsTape.tsx    # Live perpetual liquidation feed (!forceOrder@arr)
@@ -68,6 +75,13 @@ lib/
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 ├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
 └── links.ts                # Canonical repository links
+__tests__/                  # Unit test suite with Vitest (Spec 014)
+├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
+├── indicators.test.ts      # SMA, EMA, RSI, MACD, Bollinger, Stoch RSI
+├── heikenAshi.test.ts      # Heikin Ashi OHLC smoothing
+├── newsTags.test.ts        # News categorization and asset tagging
+├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
+└── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
 ```
 
 ## Notable Constraints
