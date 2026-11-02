@@ -48,6 +48,7 @@ ymc-terminal/
 │   │   ├── IndicatorsModal.tsx # ƒx Indicators search & toggle modal dialog (Spec 006)
 │   │   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
 │   │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
+│   │   ├── useLiquidationMarkers.ts # Real-time perpetual liquidation markers (Spec 013)
 │   │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag, undo/redo
 │   ├── OrderBook.tsx           # Bid/ask ladder
 │   ├── TradeTape.tsx           # Time & sales
@@ -260,4 +261,4 @@ Deferred rather than abandoned. Ordered roughly by value per unit of effort. See
 - localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`,
   `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`,
   `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`,
-  `btc-terminal:calendar-filters`
+  `btc-terminal:calendar-filters`, `btc-terminal:liq-markers`

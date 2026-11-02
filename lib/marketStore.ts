@@ -1,7 +1,9 @@
 "use client";
 
 import { useSyncExternalStore, useRef } from "react";
-import { Candle, Trade, OrderBookEntry } from "@/lib/types";
+import { Candle, Trade, OrderBookEntry, LiquidationOrder } from "@/lib/types";
+
+export type { LiquidationOrder } from "@/lib/types";
 
 export interface ExchangeData {
   name: string;
@@ -24,6 +26,7 @@ export interface MarketState {
   connected: boolean;
   exchangeCount: number;
   tickers: Record<string, number>;
+  liquidations: LiquidationOrder[];
 }
 
 export const INITIAL_MARKET_STATE: MarketState = {
@@ -45,6 +48,7 @@ export const INITIAL_MARKET_STATE: MarketState = {
   connected: false,
   exchangeCount: 0,
   tickers: {},
+  liquidations: [],
 };
 
 let state: MarketState = { ...INITIAL_MARKET_STATE };
@@ -108,6 +112,7 @@ export const marketStore = {
       symbol,
       interval,
       tickers: state.tickers,
+      liquidations: state.liquidations,
       venues: [
         { name: "Binance", price: 0, connected: false, lastUpdate: 0 },
         { name: "Coinbase", price: 0, connected: false, lastUpdate: 0 },
@@ -115,6 +120,14 @@ export const marketStore = {
         { name: "Bybit", price: 0, connected: false, lastUpdate: 0 },
       ],
     };
+    scheduleNotify();
+  },
+
+  addLiquidation(order: LiquidationOrder): void {
+    if (!order || !order.id) return;
+    const prev = state.liquidations;
+    const next = [order, ...prev.slice(0, 249)];
+    state = { ...state, liquidations: next };
     scheduleNotify();
   },
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { Trade, OrderBookEntry, Candle } from "@/lib/types";
+import { Trade, OrderBookEntry, Candle, LiquidationOrder } from "@/lib/types";
 import { isFuturesSymbol, UNIVERSE, toLabel } from "@/lib/symbols";
 import { marketStore, ExchangeData } from "@/lib/marketStore";
 
@@ -262,11 +262,87 @@ function useUniverseTickersFeed() {
 }
 
 /**
+ * Real-time perpetual liquidation bursts from Binance Futures !forceOrder@arr.
+ * Feeds into marketStore.liquidations so both LiquidationsTape and ChartMarkers
+ * share a single WebSocket connection.
+ */
+function useLiquidationsFeed() {
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let timer: NodeJS.Timeout | null = null;
+    let disposed = false;
+
+    const connect = () => {
+      if (disposed) return;
+      try {
+        ws = new WebSocket("wss://fstream.binance.com/ws/!forceOrder@arr");
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (!data?.o) return;
+            const o = data.o;
+            const price = parseFloat(o.p);
+            const qty = parseFloat(o.q);
+            const usdValue = price * qty;
+            const side: "BUY" | "SELL" = o.S;
+            const isLarge = usdValue >= 100000;
+            const time = new Date(o.T).toLocaleTimeString("en-US", { hour12: false });
+
+            const item: LiquidationOrder = {
+              id: `${o.T}-${Math.random().toString(36).slice(2, 7)}`,
+              symbol: o.s.replace("USDT", ""),
+              rawSymbol: o.s,
+              side,
+              price,
+              qty,
+              usdValue,
+              time,
+              timestamp: o.T,
+              isLarge,
+            };
+
+            marketStore.addLiquidation(item);
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          if (!disposed) {
+            timer = setTimeout(connect, RECONNECT_MS);
+          }
+        };
+
+        ws.onerror = () => {
+          ws?.close();
+        };
+      } catch {
+        if (!disposed) {
+          timer = setTimeout(connect, RECONNECT_MS);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
+    };
+  }, []);
+}
+
+/**
  * Feeds live market data into marketStore outside React state.
  * Never causes the caller (Home) to re-render.
  */
 export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
   useUniverseTickersFeed();
+  useLiquidationsFeed();
 
   const socketsRef = useRef<WebSocket[]>([]);
   const retryRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());

@@ -16,6 +16,7 @@ import { DrawingPropertiesBar } from "./chart/DrawingPropertiesBar";
 import { useChartInstance } from "./chart/useChartInstance";
 import { useIndicatorPanes } from "./chart/useIndicatorPanes";
 import { useDrawings } from "./chart/useDrawings";
+import { useLiquidationMarkers } from "./chart/useLiquidationMarkers";
 
 export type { ChartType, PriceChartProps } from "./chart/types";
 
@@ -39,9 +40,12 @@ function PriceChart({
   const [chartType, setChartType] = useState<ChartType>("candles");
   const skipChartTypeSaveRef = useRef(true);
   const skipSessionHLSaveRef = useRef(true);
+  const skipLiqSaveRef = useRef(true);
   const [showVolume, setShowVolume] = useState(true);
   const [showDayLines, setShowDayLines] = useState(true);
   const [showSessionHL, setShowSessionHL] = useState(false);
+  const [showLiquidations, setShowLiquidations] = useState(false);
+  const [liquidationThreshold, setLiquidationThreshold] = useState(50_000);
 
   // Candles formatted for visual rendering (Heikin Ashi if selected)
   const chartCandles = useMemo(
@@ -98,6 +102,31 @@ function PriceChart({
     } catch {}
   }, [showSessionHL]);
 
+  // Load and persist liquidation markers toggle & threshold
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("btc-terminal:liq-markers");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.show === "boolean") setShowLiquidations(parsed.show);
+        if (typeof parsed?.threshold === "number") setLiquidationThreshold(parsed.threshold);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (skipLiqSaveRef.current) {
+      skipLiqSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(
+        "btc-terminal:liq-markers",
+        JSON.stringify({ show: showLiquidations, threshold: liquidationThreshold })
+      );
+    } catch {}
+  }, [showLiquidations, liquidationThreshold]);
+
   // Chart canvas lifecycle, series data, viewport refit, and watermark lines
   const {
     chartRef,
@@ -126,6 +155,17 @@ function PriceChart({
     chartRef,
     candles,
     theme,
+    chartEpoch,
+  });
+
+  // Real-time perpetual liquidation markers (size-scaled circle beacons at liquidation price)
+  useLiquidationMarkers({
+    candleSeriesRef,
+    candles,
+    symbol,
+    theme,
+    showLiquidations,
+    minThreshold: liquidationThreshold,
     chartEpoch,
   });
 
@@ -230,6 +270,10 @@ function PriceChart({
         onToggleDayLines={() => setShowDayLines((v) => !v)}
         showSessionHL={showSessionHL}
         onToggleSessionHL={() => setShowSessionHL((v) => !v)}
+        showLiquidations={showLiquidations}
+        onToggleLiquidations={() => setShowLiquidations((v) => !v)}
+        liquidationThreshold={liquidationThreshold}
+        onChangeLiquidationThreshold={setLiquidationThreshold}
         activeIndicators={activeIndicators}
         onToggleIndicator={toggleIndicator}
         drawMode={drawMode}

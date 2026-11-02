@@ -41,3 +41,16 @@ export interface WatchlistItem {
   rawVolume?: number;
   sparkline?: number[];
 }
+
+export interface LiquidationOrder {
+  id: string;
+  symbol: string;
+  rawSymbol: string;
+  side: "BUY" | "SELL";
+  price: number;
+  qty: number;
+  usdValue: number;
+  time: string;
+  timestamp: number;
+  isLarge: boolean;
+}

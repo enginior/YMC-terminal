@@ -46,6 +46,7 @@ components/
 │   ├── IndicatorsModal.tsx # ƒx Indicators search & toggle modal dialog (Spec 006)
 │   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
 │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
+│   ├── useLiquidationMarkers.ts # Real-time perpetual liquidation markers (Spec 013)
 │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag, undo/redo
 ├── OrderBook.tsx           # Bid/ask ladder
 ├── TradeTape.tsx           # Time & sales
@@ -85,7 +86,8 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── newsTags.test.ts        # News categorization and asset tagging
 ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
 ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
-└── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
+├── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
+└── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
 ```
 
 ## Notable Constraints
@@ -205,11 +207,11 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
   runs on mount with the empty/default initial state and would clobber storage
   before the load effect's state lands (StrictMode double-invokes the mount, so
   the second load reads the clobbered value). Applied in: the
-  `skipNextSaveRef` / `skipChartTypeSaveRef` / `skipSessionHLSaveRef` guards in `PriceChart`
-  (drawings, chart type, session H/L persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
+  `skipNextSaveRef` / `skipChartTypeSaveRef` / `skipSessionHLSaveRef` / `skipLiqSaveRef` guards in `PriceChart`
+  (drawings, chart type, session H/L, and liquidation markers persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
   in `ThemeContext`, `skipNextSaveRef` in `useAlerts`, and `skipNextSaveRef` in `EconomicCalendarPanel` (calendar filters persistence; theme was silently resetting to Default, and
   alerts + their prefs were wiped, on every reload before this).
-- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters` (plus opt-in read-only `btc-terminal:debug-renders`).
+- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`, `btc-terminal:liq-markers` (plus opt-in read-only `btc-terminal:debug-renders`).
 
 ## Known Limitations
 - BTC/SPX/DXY/Gold correlation are placeholders (needs a premium TradFi feed)

@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { useMemo, memo } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { useMarket } from "@/lib/marketStore";
+import { LiquidationOrder } from "@/lib/types";
 
-export interface LiquidationOrder {
-  id: string;
-  symbol: string;
-  side: "BUY" | "SELL"; // BUY = short liquidated (forced buy), SELL = long liquidated (forced sell)
-  price: number;
-  qty: number;
-  usdValue: number;
-  time: string;
-  isLarge: boolean;
-}
+export type { LiquidationOrder };
 
 function fmtUsd(val: number): string {
   if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`;
@@ -22,71 +15,9 @@ function fmtUsd(val: number): string {
 
 function LiquidationsTape() {
   const { theme } = useTheme();
-  const [orders, setOrders] = useState<LiquidationOrder[]>([]);
-  const [connected, setConnected] = useState(false);
-  const [totalVol, setTotalVol] = useState(0);
-
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let timer: NodeJS.Timeout;
-
-    const connect = () => {
-      try {
-        ws = new WebSocket("wss://fstream.binance.com/ws/!forceOrder@arr");
-
-        ws.onopen = () => setConnected(true);
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (!data?.o) return;
-            const o = data.o;
-            const price = parseFloat(o.p);
-            const qty = parseFloat(o.q);
-            const usdValue = price * qty;
-            const side: "BUY" | "SELL" = o.S;
-            const isLarge = usdValue >= 100000;
-
-            const time = new Date(o.T).toLocaleTimeString("en-US", { hour12: false });
-            const item: LiquidationOrder = {
-              id: `${o.T}-${Math.random().toString(36).slice(2, 7)}`,
-              symbol: o.s.replace("USDT", ""),
-              side,
-              price,
-              qty,
-              usdValue,
-              time,
-              isLarge,
-            };
-
-            setOrders((prev) => [item, ...prev.slice(0, 49)]);
-            setTotalVol((prev) => prev + usdValue);
-          } catch {
-            /* ignore parse err */
-          }
-        };
-
-        ws.onclose = () => {
-          setConnected(false);
-          timer = setTimeout(connect, 3000);
-        };
-
-        ws.onerror = () => ws?.close();
-      } catch {
-        timer = setTimeout(connect, 3000);
-      }
-    };
-
-    connect();
-
-    return () => {
-      clearTimeout(timer);
-      if (ws) {
-        ws.onclose = null;
-        ws.close();
-      }
-    };
-  }, []);
+  const orders = useMarket((s) => s.liquidations);
+  const connected = useMarket((s) => s.connected);
+  const totalVol = useMemo(() => orders.reduce((sum, o) => sum + o.usdValue, 0), [orders]);
 
   return (
     <div className="h-full flex flex-col">

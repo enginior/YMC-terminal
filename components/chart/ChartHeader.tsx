@@ -26,6 +26,10 @@ interface ChartHeaderProps {
   onToggleDayLines: () => void;
   showSessionHL: boolean;
   onToggleSessionHL: () => void;
+  showLiquidations?: boolean;
+  onToggleLiquidations?: () => void;
+  liquidationThreshold?: number;
+  onChangeLiquidationThreshold?: (threshold: number) => void;
   activeIndicators: Set<IndicatorType>;
   onToggleIndicator: (id: IndicatorType) => void;
   drawMode?: DrawMode;
@@ -50,6 +54,10 @@ export function ChartHeader({
   onToggleDayLines,
   showSessionHL,
   onToggleSessionHL,
+  showLiquidations = false,
+  onToggleLiquidations,
+  liquidationThreshold = 50_000,
+  onChangeLiquidationThreshold,
   activeIndicators,
   onToggleIndicator,
   drawMode = "none",
@@ -65,6 +73,7 @@ export function ChartHeader({
   const [chartTypeMenuOpen, setChartTypeMenuOpen] = useState(false);
   const [moreTfOpen, setMoreTfOpen] = useState(false);
   const [indicatorsModalOpen, setIndicatorsModalOpen] = useState(false);
+  const [liqMenuOpen, setLiqMenuOpen] = useState(false);
 
   const isMoreTfActive = MORE_TIMEFRAMES.includes(timeframe as any);
 
@@ -260,6 +269,67 @@ export function ChartHeader({
           H/L
         </button>
 
+        {/* Real-Time Liquidation Markers Toggle & Filter (LIQ) */}
+        <div className="relative flex items-center">
+          <button
+            onClick={onToggleLiquidations}
+            className="text-[10px] px-1.5 py-0.5 rounded hover:opacity-80 transition-colors flex items-center gap-1 font-medium"
+            style={{
+              color: showLiquidations ? theme.red : theme.dim,
+              background: showLiquidations ? `${theme.red}18` : "transparent",
+              border: `1px solid ${showLiquidations ? `${theme.red}40` : "transparent"}`,
+            }}
+            title={`Real-Time Liquidations (LIQ): ${showLiquidations ? `ON (≥${fmtThreshold(liquidationThreshold)})` : "OFF"}`}
+          >
+            <span>LIQ</span>
+            {showLiquidations && (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLiqMenuOpen((v) => !v);
+                }}
+                className="text-[8px] opacity-75 hover:opacity-100 cursor-pointer font-mono"
+              >
+                {fmtThreshold(liquidationThreshold)} ▾
+              </span>
+            )}
+          </button>
+
+          {liqMenuOpen && showLiquidations && (
+            <div
+              className="absolute left-0 top-full mt-1 py-1 rounded border shadow-xl z-30 min-w-[110px] flex flex-col gap-0.5 backdrop-blur"
+              style={{ background: theme.panel, borderColor: theme.border }}
+            >
+              <div className="text-[9px] uppercase tracking-wider px-2 py-0.5 font-semibold" style={{ color: theme.dim }}>
+                Min Size
+              </div>
+              {[
+                { label: "All ($0+)", value: 0 },
+                { label: "≥ $10K", value: 10_000 },
+                { label: "≥ $50K", value: 50_000 },
+                { label: "≥ $100K", value: 100_000 },
+                { label: "≥ $250K", value: 250_000 },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    onChangeLiquidationThreshold?.(opt.value);
+                    setLiqMenuOpen(false);
+                  }}
+                  className="px-2 py-1 text-left text-xs hover:opacity-80 transition-colors flex items-center justify-between"
+                  style={{
+                    color: liquidationThreshold === opt.value ? theme.red : theme.text,
+                    background: liquidationThreshold === opt.value ? `${theme.red}15` : "transparent",
+                  }}
+                >
+                  <span>{opt.label}</span>
+                  {liquidationThreshold === opt.value && <span className="text-[9px]">✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Active Drawing Tool Hint Banner */}
         {drawMode !== "none" && (
           <div
@@ -351,4 +421,10 @@ export function ChartHeader({
       />
     </>
   );
+}
+
+function fmtThreshold(val: number): string {
+  if (val >= 1e6) return `$${(val / 1e6).toFixed(0)}M`;
+  if (val >= 1e3) return `$${(val / 1e3).toFixed(0)}K`;
+  return "All";
 }
