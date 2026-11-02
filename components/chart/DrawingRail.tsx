@@ -23,6 +23,10 @@ interface DrawingRailProps {
   onClearDrawings: () => void;
   selectedId: string | null;
   onDeleteSelected: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export function DrawingRail({
@@ -44,6 +48,10 @@ export function DrawingRail({
   onClearDrawings,
   selectedId,
   onDeleteSelected,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
 }: DrawingRailProps) {
   const { theme } = useTheme();
   const [activeFlyout, setActiveFlyout] = useState<"lines" | "shapes" | "positions" | null>(null);
@@ -336,6 +344,32 @@ export function DrawingRail({
 
       {/* Spacer pushing utilities to the bottom */}
       <div className="flex-1" />
+
+      {/* Undo Drawing */}
+      <button
+        onClick={onUndo}
+        disabled={!canUndo}
+        className="w-8 h-8 rounded flex items-center justify-center mb-1 transition-colors disabled:opacity-20"
+        style={{
+          color: canUndo ? theme.text : theme.dim,
+        }}
+        title="Undo Drawing (Ctrl+Z)"
+      >
+        <UndoIcon />
+      </button>
+
+      {/* Redo Drawing */}
+      <button
+        onClick={onRedo}
+        disabled={!canRedo}
+        className="w-8 h-8 rounded flex items-center justify-center mb-1 transition-colors disabled:opacity-20"
+        style={{
+          color: canRedo ? theme.text : theme.dim,
+        }}
+        title="Redo Drawing (Ctrl+Y)"
+      >
+        <RedoIcon />
+      </button>
 
       {/* Divider */}
       <div className="w-5 h-[1px] my-2" style={{ background: theme.border }} />
@@ -633,6 +667,24 @@ function TrashIcon({ size = 15 }: { size?: number }) {
       <path d="M3 4h10" />
       <path d="M6 4V2.5h4V4" />
       <path d="M4.5 4v9a1.5 1.5 0 001.5 1.5h4a1.5 1.5 0 001.5-1.5V4" />
+    </svg>
+  );
+}
+
+function UndoIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+    </svg>
+  );
+}
+
+function RedoIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13" />
     </svg>
   );
 }

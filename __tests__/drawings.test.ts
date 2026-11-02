@@ -3,6 +3,9 @@ import {
   drawingGeometry,
   hitTestDrawing,
   deleteHandlePoint,
+  drawingAnchorPoints,
+  hitTestAnchor,
+  parsePersistedDrawings,
   Drawing,
   FIB_RATIOS,
 } from "@/lib/drawings";
@@ -202,5 +205,89 @@ describe("drawings geometry and hit testing", () => {
       expect(typeof handle?.x).toBe("number");
       expect(typeof handle?.y).toBe("number");
     }
+  });
+
+  it("migrates legacy and version 1 drawing formats correctly", () => {
+    // Legacy format (raw dictionary)
+    const legacy = JSON.stringify({
+      BTCUSDT: [
+        {
+          id: "1",
+          tool: "trend",
+          time1: 100,
+          price1: 50,
+          time2: 200,
+          price2: 60,
+          color: "#fff",
+        },
+      ],
+    });
+    const parsedLegacy = parsePersistedDrawings(legacy);
+    expect(parsedLegacy.BTCUSDT).toHaveLength(1);
+    expect(parsedLegacy.BTCUSDT[0].id).toBe("1");
+
+    // Version 1 format
+    const v1 = JSON.stringify({
+      version: 1,
+      symbols: {
+        ETHUSDT: [
+          {
+            id: "2",
+            tool: "level",
+            time1: 150,
+            price1: 75,
+            time2: 150,
+            price2: 75,
+            color: "#ff0",
+            lineWidth: 2,
+            lineStyle: "dashed",
+            locked: true,
+          },
+        ],
+      },
+    });
+    const parsedV1 = parsePersistedDrawings(v1);
+    expect(parsedV1.ETHUSDT).toHaveLength(1);
+    expect(parsedV1.ETHUSDT[0].lineWidth).toBe(2);
+    expect(parsedV1.ETHUSDT[0].lineStyle).toBe("dashed");
+    expect(parsedV1.ETHUSDT[0].locked).toBe(true);
+
+    // Corrupted input
+    expect(parsePersistedDrawings("not-valid-json")).toEqual({});
+    expect(parsePersistedDrawings("")).toEqual({});
+    expect(parsePersistedDrawings("[]")).toEqual({});
+  });
+
+  it("calculates anchor points and performs anchor hit testing", () => {
+    const trend: Drawing = {
+      id: "trend-1",
+      tool: "trend",
+      time1: 1100,
+      price1: 100,
+      time2: 1300,
+      price2: 250,
+      color: "#ffffff",
+    };
+
+    const anchors = drawingAnchorPoints(trend, mockChart, mockSeries);
+    expect(anchors).not.toBeNull();
+    expect(anchors?.a1).toEqual({ x: 100, y: 400 });
+    expect(anchors?.a2).toEqual({ x: 300, y: 250 });
+
+    // Anchor a1 hit test
+    expect(hitTestAnchor(trend, { x: 100, y: 400 }, mockChart, mockSeries)).toBe("a1");
+    expect(hitTestAnchor(trend, { x: 104, y: 403 }, mockChart, mockSeries, 8)).toBe("a1");
+
+    // Anchor a2 hit test
+    expect(hitTestAnchor(trend, { x: 300, y: 250 }, mockChart, mockSeries)).toBe("a2");
+    expect(hitTestAnchor(trend, { x: 298, y: 252 }, mockChart, mockSeries, 8)).toBe("a2");
+
+    // Miss
+    expect(hitTestAnchor(trend, { x: 200, y: 325 }, mockChart, mockSeries, 8)).toBeNull();
+
+    // Locked drawing suppresses anchor hit test
+    const lockedTrend = { ...trend, locked: true };
+    expect(hitTestAnchor(lockedTrend, { x: 100, y: 400 }, mockChart, mockSeries)).toBeNull();
+    expect(hitTestAnchor(lockedTrend, { x: 300, y: 250 }, mockChart, mockSeries)).toBeNull();
   });
 });

@@ -24,6 +24,8 @@ export type DrawingTool =
   | "long"
   | "short";
 
+export type LineStylePattern = "solid" | "dashed" | "dotted";
+
 export interface Drawing {
   id: string;
   tool: DrawingTool;
@@ -32,6 +34,28 @@ export interface Drawing {
   time2: number;
   price2: number;
   color: string;
+  lineWidth?: number; // 1, 2, 3 (default 1.5)
+  lineStyle?: LineStylePattern; // default "solid"
+  locked?: boolean;
+}
+
+export interface PersistedDrawingsData {
+  version: number;
+  symbols: Record<string, Drawing[]>;
+}
+
+export function parsePersistedDrawings(raw: string): Record<string, Drawing[]> {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (typeof parsed.version === "number" && parsed.symbols && typeof parsed.symbols === "object") {
+      return parsed.symbols;
+    }
+    // Legacy format: raw dictionary of symbol -> Drawing[]
+    return parsed;
+  } catch {
+    return {};
+  }
 }
 
 export interface DrawingsStyle {
@@ -304,6 +328,48 @@ export function deleteHandlePoint(
   return { x: b.x, y: b.y };
 }
 
+/** Locations of interactive resize anchor points in pane pixels. */
+export function drawingAnchorPoints(
+  d: Drawing,
+  chart: IChartApi,
+  series: ISeriesApi<"Candlestick">,
+  candles?: { time: number }[]
+): { a1: Point; a2?: Point } | null {
+  const g = drawingGeometry(d, chart, series, candles);
+  if (!g) return null;
+  if (g.kind === "level") {
+    return { a1: { x: HANDLE_INSET + 20, y: g.points[0].y } };
+  }
+  if (g.kind === "hray") {
+    return { a1: { x: g.points[0].x, y: g.points[0].y } };
+  }
+  if (g.kind === "ray") {
+    return { a1: g.points[0], a2: g.guide ?? g.points[1] };
+  }
+  return { a1: g.points[0], a2: g.points[1] };
+}
+
+/** Hit tests if a pointer is touching an anchor handle of a selected drawing. */
+export function hitTestAnchor(
+  d: Drawing,
+  p: Point,
+  chart: IChartApi,
+  series: ISeriesApi<"Candlestick">,
+  tolerance = 8,
+  candles?: { time: number }[]
+): "a1" | "a2" | null {
+  if (d.locked) return null;
+  const anchors = drawingAnchorPoints(d, chart, series, candles);
+  if (!anchors) return null;
+  if (Math.hypot(p.x - anchors.a1.x, p.y - anchors.a1.y) <= tolerance) {
+    return "a1";
+  }
+  if (anchors.a2 && Math.hypot(p.x - anchors.a2.x, p.y - anchors.a2.y) <= tolerance) {
+    return "a2";
+  }
+  return null;
+}
+
 class DrawingsRenderer implements IPrimitivePaneRenderer {
   constructor(private readonly owner: DrawingsPrimitive) {}
 
@@ -424,16 +490,25 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
         const isHovered = item.id === this.hoveredId;
         const [a, b] = g.points;
 
+        const baseWidth = item.lineWidth ?? 1.5;
+        const strokeWidth = isSelected || isHovered ? baseWidth + 0.9 : baseWidth;
         context.strokeStyle = item.color;
         context.fillStyle = item.color;
         context.lineWidth = Math.max(
           1,
-          Math.round((isSelected || isHovered ? 2.4 : 1.5) * hx)
+          Math.round(strokeWidth * hx)
         );
         context.globalAlpha = isDraft ? 0.85 : 1;
 
+        const resolveDash = (style: LineStylePattern | undefined, defaultDash: number[]) => {
+          if (style === "dashed") return [6 * hx, 4 * hx];
+          if (style === "dotted") return [2 * hx, 3 * hx];
+          if (style === "solid") return [];
+          return defaultDash;
+        };
+
         if (g.kind === "level") {
-          context.setLineDash(isDraft ? dash : [5 * hx, 4 * hx]);
+          context.setLineDash(isDraft ? dash : resolveDash(item.lineStyle, [5 * hx, 4 * hx]));
           context.beginPath();
           context.moveTo(px(a.x), py(a.y));
           context.lineTo(px(b.x), py(b.y));
@@ -441,7 +516,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.setLineDash([]);
           this.drawLabel(context, px(b.x), py(b.y), item.price1, item.color, hx, vy);
         } else if (g.kind === "hray") {
-          context.setLineDash(isDraft ? dash : [6 * hx, 3 * hx]);
+          context.setLineDash(isDraft ? dash : resolveDash(item.lineStyle, [6 * hx, 3 * hx]));
           context.beginPath();
           context.moveTo(px(a.x), py(a.y));
           context.lineTo(px(b.x), py(b.y));
@@ -449,7 +524,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.setLineDash([]);
           this.drawLabel(context, px(b.x), py(b.y), item.price1, item.color, hx, vy);
         } else if (g.kind === "segment" || g.kind === "ray") {
-          context.setLineDash(isDraft ? dash : []);
+          context.setLineDash(isDraft ? dash : resolveDash(item.lineStyle, []));
           context.beginPath();
           context.moveTo(px(a.x), py(a.y));
           context.lineTo(px(b.x), py(b.y));
@@ -464,7 +539,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
             context.fill();
           }
         } else if (g.kind === "arrow") {
-          context.setLineDash(isDraft ? dash : []);
+          context.setLineDash(isDraft ? dash : resolveDash(item.lineStyle, []));
           context.beginPath();
           context.moveTo(px(a.x), py(a.y));
           context.lineTo(px(b.x), py(b.y));
@@ -558,13 +633,15 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
             // Boundary strokes
             context.globalAlpha = 1;
             context.strokeStyle = item.color;
-            context.lineWidth = Math.max(1, Math.round(1.5 * hx));
+            context.lineWidth = Math.max(1, Math.round(strokeWidth * hx));
+            context.setLineDash(resolveDash(item.lineStyle, []));
             context.beginPath();
             context.moveTo(pA1.x, pA1.y);
             context.lineTo(pB1.x, pB1.y);
             context.moveTo(pA2.x, pA2.y);
             context.lineTo(pB2.x, pB2.y);
             context.stroke();
+            context.setLineDash([]);
 
             // Centerline
             context.setLineDash(dash);
@@ -650,7 +727,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.globalAlpha = isDraft ? 0.18 : isHovered || isSelected ? 0.2 : 0.13;
           context.fillRect(rx, ry, rw, rh);
           context.globalAlpha = isDraft ? 0.9 : 1;
-          context.setLineDash(isDraft ? dash : []);
+          context.setLineDash(isDraft ? dash : resolveDash(item.lineStyle, []));
           context.strokeRect(rx, ry, rw, rh);
           context.setLineDash([]);
 
@@ -713,21 +790,16 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     context.setLineDash([]);
     const dot = Math.round(3.5 * hx);
 
-    if (g.kind !== "level") {
-      const handlePoints =
-        g.kind === "ray" && g.guide
-          ? [g.points[0], g.guide]
-          : g.kind === "hray"
-          ? [g.points[0]]
-          : g.points;
-
+    const anchors = drawingAnchorPoints(item, this.chart!, this.series!, this.candles);
+    if (anchors) {
+      const handlePoints = [anchors.a1, ...(anchors.a2 ? [anchors.a2] : [])];
       for (const p of handlePoints) {
         context.beginPath();
         context.arc(p.x * hx, p.y * vy, dot, 0, Math.PI * 2);
-        context.fillStyle = this.style.labelBg;
+        context.fillStyle = item.locked ? "#4b5563" : this.style.labelBg;
         context.fill();
         context.lineWidth = Math.max(1, Math.round(1.5 * hx));
-        context.strokeStyle = item.color;
+        context.strokeStyle = item.locked ? "#9ca3af" : item.color;
         context.stroke();
       }
     }
@@ -740,7 +812,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
 
     context.beginPath();
     context.arc(cx, cy, R, 0, Math.PI * 2);
-    context.fillStyle = item.color;
+    context.fillStyle = item.locked ? "#4b5563" : item.color;
     context.fill();
     context.lineWidth = Math.max(1, Math.round(1.5 * hx));
     context.strokeStyle = this.style.labelBg;

@@ -12,6 +12,7 @@ import {
 } from "./chart/types";
 import { ChartHeader } from "./chart/ChartHeader";
 import { DrawingRail } from "./chart/DrawingRail";
+import { DrawingPropertiesBar } from "./chart/DrawingPropertiesBar";
 import { useChartInstance } from "./chart/useChartInstance";
 import { useIndicatorPanes } from "./chart/useIndicatorPanes";
 import { useDrawings } from "./chart/useDrawings";
@@ -146,8 +147,14 @@ function PriceChart({
     setLastPositionTool,
     drawings,
     selectedId,
+    setSelectedId,
     removeDrawingById,
     clearDrawings,
+    updateDrawingProperties,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
     onPointerDown,
     onPointerMove,
     onPointerUp,
@@ -268,6 +275,10 @@ function PriceChart({
           onClearDrawings={clearDrawings}
           selectedId={selectedId}
           onDeleteSelected={() => selectedId && removeDrawingById(selectedId)}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
         />
 
         {/* Chart Canvas Area */}
@@ -290,6 +301,21 @@ function PriceChart({
             }}
           >
             <div ref={containerRef} className="absolute inset-0" />
+
+            {/* Selected Drawing Properties Toolbar */}
+            {selectedId && (() => {
+              const sel = drawings.find((d) => d.id === selectedId);
+              if (!sel) return null;
+              return (
+                <DrawingPropertiesBar
+                  drawing={sel}
+                  theme={theme}
+                  onUpdate={(updates) => updateDrawingProperties(sel.id, updates)}
+                  onDelete={(id) => removeDrawingById(id)}
+                  onClose={() => setSelectedId(null)}
+                />
+              );
+            })()}
 
             {/* Input catcher: only mounted while a tool is active, so it never
                 interferes with panning, the crosshair, or tooltips. */}

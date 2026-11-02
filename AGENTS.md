@@ -42,10 +42,11 @@ components/
 │   ├── ChartTypeIcon.tsx   # Candles / Heikin Ashi / Line SVG icons
 │   ├── ChartHeader.tsx     # Top toolbar controls (timeframe, type, indicator modal trigger, exports)
 │   ├── DrawingRail.tsx     # Left vertical drawing toolbar with grouped flyouts & actions (Spec 006)
+│   ├── DrawingPropertiesBar.tsx # Floating properties bar for selected drawing (color, stroke, pattern, lock)
 │   ├── IndicatorsModal.tsx # ƒx Indicators search & toggle modal dialog (Spec 006)
 │   ├── useChartInstance.ts # Canvas lifecycle, series data, refit, session H/L
 │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
-│   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag
+│   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag, undo/redo
 ├── OrderBook.tsx           # Bid/ask ladder
 ├── TradeTape.tsx           # Time & sales
 ├── LiquidationsTape.tsx    # Live perpetual liquidation feed (!forceOrder@arr)
@@ -164,6 +165,14 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
   avoid a render per mouse move. Separate whole-second synthetic clicks are
   suppressed by the library's click detection — real users clicking then pausing
   are unaffected.
+- **Drawing properties, undo/redo history, and interactive anchor dragging.**
+  Selecting a drawing mounts `components/chart/DrawingPropertiesBar.tsx` (color swatches,
+  line widths `1px`/`2px`/`3px`, patterns `solid`/`dashed`/`dotted`, individual lock toggle,
+  and delete). Anchor handles (`a1` / `a2`) can be dragged live with magnet snapping via a
+  container `pointerdown` capture listener that prevents lightweight-charts pan collisions.
+  An undo/redo history engine maintains up to 50 states per symbol, accessible via hotkeys
+  (`Ctrl+Z` / `Cmd+Z`, `Ctrl+Y` / `Ctrl+Shift+Z`) and DrawingRail utility buttons.
+  Saved drawings are versioned under `{ version: 1, symbols: ... }` with seamless legacy migration.
 - **Magnet mode snaps to OHLC, and drives the crosshair via `setCrosshairPosition`.**
   The toolbar's 🧲 toggle (in-memory, like VOL/DAY) makes `snapPriceToOhlc` +
   `candleAt` pull both the crosshair and drawing anchors onto the hovered

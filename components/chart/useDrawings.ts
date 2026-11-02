@@ -8,6 +8,8 @@ import {
   DrawingTool,
   hitTestDrawing,
   deleteHandlePoint,
+  hitTestAnchor,
+  parsePersistedDrawings,
   timeToCoordinateExtrapolated,
 } from "@/lib/drawings";
 import {
@@ -57,6 +59,10 @@ export function useDrawings({
   const [drawingsBySymbol, setDrawingsBySymbol] = useState<Record<string, Drawing[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Undo / Redo history engine state
+  const historyRef = useRef<Record<string, { past: Drawing[][]; future: Drawing[][] }>>({});
+  const [, setHistoryEpoch] = useState(0);
+
   const drawings = drawingsBySymbol[symbol] ?? [];
 
   const drawingsPrimRef = useRef<DrawingsPrimitive | null>(null);
@@ -65,6 +71,11 @@ export function useDrawings({
   const hoveredRef = useRef<string | null>(null);
   const selectedRef = useRef<string | null>(null);
   const lastSnapRef = useRef<{ time: number; price: number } | null>(null);
+  const draggingAnchorRef = useRef<{
+    drawingId: string;
+    anchor: "a1" | "a2";
+    snapshotBeforeDrag: Drawing[];
+  } | null>(null);
 
   // State ref to prevent event handlers from closing over stale state
   const stateRef = useRef({
@@ -92,20 +103,97 @@ export function useDrawings({
     isHidden,
   };
 
-  const removeDrawingById = useCallback((id: string) => {
+  /* ---------------- undo / redo engine ---------------- */
+
+  const recordHistory = useCallback((previousDrawings: Drawing[]) => {
     const sym = stateRef.current.symbol;
+    const current = historyRef.current[sym] ?? { past: [], future: [] };
+    const newPast = [...current.past, previousDrawings];
+    if (newPast.length > 50) newPast.shift();
+    historyRef.current[sym] = {
+      past: newPast,
+      future: [],
+    };
+    setHistoryEpoch((e) => e + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const sym = stateRef.current.symbol;
+    const current = historyRef.current[sym];
+    if (!current || current.past.length === 0) return;
+
+    const previousSnapshot = current.past[current.past.length - 1];
+    const newPast = current.past.slice(0, -1);
+    const currentDrawings = stateRef.current.drawings;
+
+    historyRef.current[sym] = {
+      past: newPast,
+      future: [currentDrawings, ...current.future],
+    };
+
     setDrawingsBySymbol((prev) => ({
       ...prev,
-      [sym]: (prev[sym] ?? []).filter((d) => d.id !== id),
+      [sym]: previousSnapshot,
     }));
-    if (selectedRef.current === id) {
+
+    if (selectedRef.current && !previousSnapshot.some((d) => d.id === selectedRef.current)) {
       selectedRef.current = null;
       setSelectedId(null);
     }
-    if (hoveredRef.current === id) hoveredRef.current = null;
+    setHistoryEpoch((e) => e + 1);
   }, []);
 
+  const redo = useCallback(() => {
+    const sym = stateRef.current.symbol;
+    const current = historyRef.current[sym];
+    if (!current || current.future.length === 0) return;
+
+    const nextSnapshot = current.future[0];
+    const newFuture = current.future.slice(1);
+    const currentDrawings = stateRef.current.drawings;
+
+    historyRef.current[sym] = {
+      past: [...current.past, currentDrawings],
+      future: newFuture,
+    };
+
+    setDrawingsBySymbol((prev) => ({
+      ...prev,
+      [sym]: nextSnapshot,
+    }));
+
+    if (selectedRef.current && !nextSnapshot.some((d) => d.id === selectedRef.current)) {
+      selectedRef.current = null;
+      setSelectedId(null);
+    }
+    setHistoryEpoch((e) => e + 1);
+  }, []);
+
+  const symHistory = historyRef.current[symbol];
+  const canUndo = (symHistory?.past.length ?? 0) > 0;
+  const canRedo = (symHistory?.future.length ?? 0) > 0;
+
+  const removeDrawingById = useCallback(
+    (id: string) => {
+      const sym = stateRef.current.symbol;
+      const current = stateRef.current.drawings;
+      recordHistory(current);
+      setDrawingsBySymbol((prev) => ({
+        ...prev,
+        [sym]: (prev[sym] ?? []).filter((d) => d.id !== id),
+      }));
+      if (selectedRef.current === id) {
+        selectedRef.current = null;
+        setSelectedId(null);
+      }
+      if (hoveredRef.current === id) hoveredRef.current = null;
+    },
+    [recordHistory]
+  );
+
   const clearDrawings = useCallback(() => {
+    if (stateRef.current.drawings.length === 0) return;
+    recordHistory(stateRef.current.drawings);
     draftRef.current = null;
     drawingsPrimRef.current?.setDraft(null);
     selectedRef.current = null;
@@ -113,7 +201,20 @@ export function useDrawings({
     setSelectedId(null);
     drawingsPrimRef.current?.setInteraction(null, null);
     setDrawingsBySymbol((prev) => ({ ...prev, [symbol]: [] }));
-  }, [symbol]);
+  }, [symbol, recordHistory]);
+
+  const updateDrawingProperties = useCallback(
+    (id: string, updates: Partial<Drawing>) => {
+      const sym = stateRef.current.symbol;
+      const current = stateRef.current.drawings;
+      recordHistory(current);
+      setDrawingsBySymbol((prev) => ({
+        ...prev,
+        [sym]: (prev[sym] ?? []).map((d) => (d.id === id ? { ...d, ...updates } : d)),
+      }));
+    },
+    [recordHistory]
+  );
 
   /* ---------------- drawings persistence (localStorage) ---------------- */
 
@@ -123,10 +224,8 @@ export function useDrawings({
     try {
       const raw = window.localStorage.getItem(DRAWINGS_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          setDrawingsBySymbol(parsed);
-        }
+        const parsed = parsePersistedDrawings(raw);
+        setDrawingsBySymbol(parsed);
       }
     } catch {}
   }, []);
@@ -137,7 +236,13 @@ export function useDrawings({
       return;
     }
     try {
-      window.localStorage.setItem(DRAWINGS_KEY, JSON.stringify(drawingsBySymbol));
+      window.localStorage.setItem(
+        DRAWINGS_KEY,
+        JSON.stringify({
+          version: 1,
+          symbols: drawingsBySymbol,
+        })
+      );
     } catch {}
   }, [drawingsBySymbol]);
 
@@ -197,6 +302,17 @@ export function useDrawings({
         if (containerRef.current) containerRef.current.style.cursor = "default";
         return;
       }
+
+      // Check if hovering over an anchor of the currently selected drawing
+      const sel = selectedRef.current ? stateRef.current.drawings.find((d) => d.id === selectedRef.current) : null;
+      if (sel && !sel.locked && !stateRef.current.isLocked && !stateRef.current.isHidden) {
+        const anchorHit = hitTestAnchor(sel, param.point, chart, series, 10, stateRef.current.candles);
+        if (anchorHit) {
+          if (containerRef.current) containerRef.current.style.cursor = "crosshair";
+          return;
+        }
+      }
+
       const hit = topmostAt(param.point);
       if (hit === hoveredRef.current) return;
       hoveredRef.current = hit;
@@ -279,7 +395,7 @@ export function useDrawings({
     return palette[drawings.length % palette.length];
   };
 
-  const toChartPoint = (clientX: number, clientY: number) => {
+  const toChartPoint = useCallback((clientX: number, clientY: number) => {
     const el = containerRef.current;
     const chart = chartRef.current;
     const series = candleSeriesRef.current;
@@ -299,13 +415,13 @@ export function useDrawings({
     // Extrapolate time into future whitespace when coordinateToTime is null
     if (time == null) {
       const logical = timeScale.coordinateToLogical(x);
-      const candles = stateRef.current.candles;
-      if (logical !== null && candles.length > 0) {
-        const lastCandle = candles[candles.length - 1];
-        const lastIdx = candles.length - 1;
+      const c = stateRef.current.candles;
+      if (logical !== null && c.length > 0) {
+        const lastCandle = c[c.length - 1];
+        const lastIdx = c.length - 1;
         const step =
-          candles.length >= 2
-            ? Math.max(1, lastCandle.time - candles[candles.length - 2].time)
+          c.length >= 2
+            ? Math.max(1, lastCandle.time - c[c.length - 2].time)
             : 60;
         time = Math.round(lastCandle.time + (logical - lastIdx) * step);
       } else {
@@ -320,7 +436,97 @@ export function useDrawings({
       if (candle) price = snapPriceToOhlc(candle, price);
     }
     return { time, price };
-  };
+  }, [containerRef, chartRef, candleSeriesRef]);
+
+  /* ---------------- anchor dragging lifecycle ---------------- */
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onContainerPointerDown = (e: PointerEvent) => {
+      if (stateRef.current.drawMode !== "none") return;
+      const selId = selectedRef.current;
+      if (!selId || stateRef.current.isLocked || stateRef.current.isHidden) return;
+      const chart = chartRef.current;
+      const series = candleSeriesRef.current;
+      if (!chart || !series) return;
+
+      const sel = stateRef.current.drawings.find((d) => d.id === selId);
+      if (!sel || sel.locked) return;
+
+      const rect = container.getBoundingClientRect();
+      const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const anchor = hitTestAnchor(sel, p, chart, series, 10, stateRef.current.candles);
+      if (!anchor) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      draggingAnchorRef.current = {
+        drawingId: sel.id,
+        anchor,
+        snapshotBeforeDrag: [...stateRef.current.drawings],
+      };
+
+      try {
+        container.setPointerCapture(e.pointerId);
+      } catch {}
+    };
+
+    const onContainerPointerMove = (e: PointerEvent) => {
+      const drag = draggingAnchorRef.current;
+      if (!drag) return;
+
+      const pt = toChartPoint(e.clientX, e.clientY);
+      if (!pt) return;
+
+      const sym = stateRef.current.symbol;
+      setDrawingsBySymbol((prev) => {
+        const list = prev[sym] ?? [];
+        return {
+          ...prev,
+          [sym]: list.map((d) => {
+            if (d.id !== drag.drawingId) return d;
+            if (d.tool === "level") {
+              return { ...d, price1: pt.price, price2: pt.price };
+            }
+            if (d.tool === "hray") {
+              return { ...d, time1: pt.time, price1: pt.price, price2: pt.price };
+            }
+            if (drag.anchor === "a1") {
+              return { ...d, time1: pt.time, price1: pt.price };
+            } else {
+              return { ...d, time2: pt.time, price2: pt.price };
+            }
+          }),
+        };
+      });
+    };
+
+    const onContainerPointerUp = (e: PointerEvent) => {
+      const drag = draggingAnchorRef.current;
+      if (!drag) return;
+      try {
+        container.releasePointerCapture(e.pointerId);
+      } catch {}
+
+      recordHistory(drag.snapshotBeforeDrag);
+      draggingAnchorRef.current = null;
+    };
+
+    container.addEventListener("pointerdown", onContainerPointerDown, { capture: true });
+    container.addEventListener("pointermove", onContainerPointerMove);
+    container.addEventListener("pointerup", onContainerPointerUp);
+    container.addEventListener("pointercancel", onContainerPointerUp);
+
+    return () => {
+      container.removeEventListener("pointerdown", onContainerPointerDown, { capture: true });
+      container.removeEventListener("pointermove", onContainerPointerMove);
+      container.removeEventListener("pointerup", onContainerPointerUp);
+      container.removeEventListener("pointercancel", onContainerPointerUp);
+    };
+  }, [containerRef, chartRef, candleSeriesRef, toChartPoint, recordHistory]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (drawMode === "none") return;
@@ -396,6 +602,7 @@ export function useDrawings({
       }
     }
 
+    recordHistory(stateRef.current.drawings);
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setDrawingsBySymbol((prev) => ({
       ...prev,
@@ -425,6 +632,24 @@ export function useDrawings({
         return;
       }
 
+      // Undo: Ctrl+Z / Cmd+Z
+      const isUndo = (e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && !e.shiftKey;
+      if (isUndo && !typing) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z / Cmd+Shift+Z
+      const isRedo =
+        ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) ||
+        ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && e.shiftKey);
+      if (isRedo && !typing) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       if ((e.key === "Delete" || e.key === "Backspace") && !typing && selectedRef.current) {
         e.preventDefault();
         removeDrawingById(selectedRef.current);
@@ -451,7 +676,7 @@ export function useDrawings({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [removeDrawingById, setShowVolume, setShowDayLines]);
+  }, [removeDrawingById, setShowVolume, setShowDayLines, undo, redo]);
 
   return {
     drawMode,
@@ -470,8 +695,14 @@ export function useDrawings({
     setLastPositionTool,
     drawings,
     selectedId,
+    setSelectedId,
     removeDrawingById,
     clearDrawings,
+    updateDrawingProperties,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
     onPointerDown,
     onPointerMove,
     onPointerUp,
