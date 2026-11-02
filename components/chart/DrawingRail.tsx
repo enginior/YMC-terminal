@@ -7,8 +7,12 @@ import { DrawMode } from "./types";
 interface DrawingRailProps {
   drawMode: DrawMode;
   onSetDrawMode: React.Dispatch<React.SetStateAction<DrawMode>>;
-  lastLineTool: "trend" | "level";
-  onSelectLineTool: (tool: "trend" | "level") => void;
+  lastLineTool: "trend" | "ray" | "hray" | "level" | "arrow";
+  onSelectLineTool: (tool: "trend" | "ray" | "hray" | "level" | "arrow") => void;
+  lastShapeTool: "rect" | "channel";
+  onSelectShapeTool: (tool: "rect" | "channel") => void;
+  lastPositionTool: "long" | "short";
+  onSelectPositionTool: (tool: "long" | "short") => void;
   magnetOn: boolean;
   onToggleMagnet: () => void;
   isLocked: boolean;
@@ -26,6 +30,10 @@ export function DrawingRail({
   onSetDrawMode,
   lastLineTool,
   onSelectLineTool,
+  lastShapeTool,
+  onSelectShapeTool,
+  lastPositionTool,
+  onSelectPositionTool,
   magnetOn,
   onToggleMagnet,
   isLocked,
@@ -38,7 +46,7 @@ export function DrawingRail({
   onDeleteSelected,
 }: DrawingRailProps) {
   const { theme } = useTheme();
-  const [activeFlyout, setActiveFlyout] = useState<"lines" | "shapes" | null>(null);
+  const [activeFlyout, setActiveFlyout] = useState<"lines" | "shapes" | "positions" | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
 
   // Close flyouts when clicking outside
@@ -53,8 +61,10 @@ export function DrawingRail({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeFlyout]);
 
-  const isLineActive = drawMode === "trend" || drawMode === "level";
-  const isRectActive = drawMode === "rect";
+  const isLineActive = ["trend", "ray", "hray", "level", "arrow"].includes(drawMode);
+  const isFibActive = drawMode === "fib";
+  const isShapeActive = ["rect", "channel"].includes(drawMode);
+  const isPositionActive = ["long", "short"].includes(drawMode);
   const isRulerActive = drawMode === "ruler";
 
   return (
@@ -66,7 +76,7 @@ export function DrawingRail({
         borderColor: theme.border,
       }}
     >
-      {/* 1. Lines Group (Trendline / Horizontal Level) */}
+      {/* 1. Lines Group (Trendline, Ray, Horizontal Ray, Level, Arrow) */}
       <div className="relative group/tool mb-1.5">
         <div className="flex items-center">
           <button
@@ -77,9 +87,9 @@ export function DrawingRail({
               color: isLineActive ? theme.yellow : theme.dim,
               border: `1px solid ${isLineActive ? theme.yellow : "transparent"}`,
             }}
-            title={`${lastLineTool === "trend" ? "Trend Line (╱)" : "Horizontal Level (─)"} — click arrow for more`}
+            title={`${getLineToolLabel(lastLineTool)} — click arrow for more`}
           >
-            {lastLineTool === "trend" ? <TrendIcon /> : <LevelIcon />}
+            {renderLineToolIcon(lastLineTool)}
 
             {/* Tiny arrow indicating flyout menu */}
             <span
@@ -98,63 +108,217 @@ export function DrawingRail({
         {/* Lines Flyout Popover */}
         {activeFlyout === "lines" && (
           <div
-            className="absolute left-full top-0 ml-1.5 py-1 px-1 rounded border shadow-xl z-30 min-w-[140px] flex flex-col gap-0.5"
+            className="absolute left-full top-0 ml-1.5 py-1 px-1 rounded border shadow-xl z-30 min-w-[155px] flex flex-col gap-0.5"
             style={{ background: theme.panel, borderColor: theme.border }}
           >
             <div className="text-[9px] uppercase tracking-wider px-2 py-1 font-semibold" style={{ color: theme.dim }}>
               Lines & Rays
             </div>
+            {(
+              [
+                { id: "trend", label: "Trend Line", icon: <TrendIcon size={14} /> },
+                { id: "ray", label: "Extended Ray", icon: <RayIcon size={14} /> },
+                { id: "hray", label: "Horizontal Ray", icon: <HRayIcon size={14} /> },
+                { id: "level", label: "Horizontal Level", icon: <LevelIcon size={14} /> },
+                { id: "arrow", label: "Arrow", icon: <ArrowIcon size={14} /> },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onSelectLineTool(item.id);
+                  setActiveFlyout(null);
+                }}
+                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left hover:opacity-80 transition-colors"
+                style={{
+                  background: drawMode === item.id ? `${theme.yellow}20` : "transparent",
+                  color: drawMode === item.id ? theme.yellow : theme.text,
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+                {lastLineTool === item.id && <span className="ml-auto text-[9px] opacity-60">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 2. Fibonacci Retracement */}
+      <div className="relative group/tool mb-1.5">
+        <button
+          onClick={() => onSetDrawMode((m) => (m === "fib" ? "none" : "fib"))}
+          className="w-8 h-8 rounded flex items-center justify-center transition-colors relative"
+          style={{
+            background: isFibActive ? `${theme.yellow}25` : "transparent",
+            color: isFibActive ? theme.yellow : theme.dim,
+            border: `1px solid ${isFibActive ? theme.yellow : "transparent"}`,
+          }}
+          title="Fibonacci Retracement (☷)"
+        >
+          <FibIcon />
+        </button>
+      </div>
+
+      {/* 3. Geometric Shapes Group (Rectangle, Parallel Channel) */}
+      <div className="relative group/tool mb-1.5">
+        <div className="flex items-center">
+          <button
+            onClick={() => onSelectShapeTool(lastShapeTool)}
+            className="w-8 h-8 rounded flex items-center justify-center transition-colors relative"
+            style={{
+              background: isShapeActive ? `${theme.blue}25` : "transparent",
+              color: isShapeActive ? theme.blue : theme.dim,
+              border: `1px solid ${isShapeActive ? theme.blue : "transparent"}`,
+            }}
+            title={`${lastShapeTool === "rect" ? "Rectangle / Box (▭)" : "Parallel Channel (⫽)"} — click arrow for more`}
+          >
+            {lastShapeTool === "rect" ? <RectIcon /> : <ChannelIcon />}
+
+            {/* Tiny arrow indicating flyout menu */}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveFlyout((prev) => (prev === "shapes" ? null : "shapes"));
+              }}
+              className="absolute bottom-0.5 right-0.5 text-[7px] leading-none opacity-60 hover:opacity-100 cursor-pointer"
+              style={{ color: isShapeActive ? theme.blue : theme.text }}
+            >
+              ▶
+            </span>
+          </button>
+        </div>
+
+        {/* Shapes Flyout Popover */}
+        {activeFlyout === "shapes" && (
+          <div
+            className="absolute left-full top-0 ml-1.5 py-1 px-1 rounded border shadow-xl z-30 min-w-[160px] flex flex-col gap-0.5"
+            style={{ background: theme.panel, borderColor: theme.border }}
+          >
+            <div className="text-[9px] uppercase tracking-wider px-2 py-1 font-semibold" style={{ color: theme.dim }}>
+              Geometric Shapes
+            </div>
             <button
               onClick={() => {
-                onSelectLineTool("trend");
+                onSelectShapeTool("rect");
                 setActiveFlyout(null);
               }}
               className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left hover:opacity-80 transition-colors"
               style={{
-                background: drawMode === "trend" ? `${theme.yellow}20` : "transparent",
-                color: drawMode === "trend" ? theme.yellow : theme.text,
+                background: drawMode === "rect" ? `${theme.blue}20` : "transparent",
+                color: drawMode === "rect" ? theme.blue : theme.text,
               }}
             >
-              <TrendIcon size={14} />
-              <span>Trend Line</span>
-              {lastLineTool === "trend" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
+              <RectIcon size={14} />
+              <span>Rectangle / Box</span>
+              {lastShapeTool === "rect" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
             </button>
             <button
               onClick={() => {
-                onSelectLineTool("level");
+                onSelectShapeTool("channel");
                 setActiveFlyout(null);
               }}
               className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left hover:opacity-80 transition-colors"
               style={{
-                background: drawMode === "level" ? `${theme.yellow}20` : "transparent",
-                color: drawMode === "level" ? theme.yellow : theme.text,
+                background: drawMode === "channel" ? `${theme.blue}20` : "transparent",
+                color: drawMode === "channel" ? theme.blue : theme.text,
               }}
             >
-              <LevelIcon size={14} />
-              <span>Horizontal Level</span>
-              {lastLineTool === "level" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
+              <ChannelIcon size={14} />
+              <span>Parallel Channel</span>
+              {lastShapeTool === "channel" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
             </button>
           </div>
         )}
       </div>
 
-      {/* 2. Geometric Shapes Group (Rectangle / Box) */}
+      {/* 4. Positions & Risk Tools (Long Position, Short Position) */}
       <div className="relative group/tool mb-1.5">
-        <button
-          onClick={() => onSetDrawMode((m) => (m === "rect" ? "none" : "rect"))}
-          className="w-8 h-8 rounded flex items-center justify-center transition-colors relative"
-          style={{
-            background: isRectActive ? `${theme.green}25` : "transparent",
-            color: isRectActive ? theme.green : theme.dim,
-            border: `1px solid ${isRectActive ? theme.green : "transparent"}`,
-          }}
-          title="Rectangle / Box (▭)"
-        >
-          <RectIcon />
-        </button>
+        <div className="flex items-center">
+          <button
+            onClick={() => onSelectPositionTool(lastPositionTool)}
+            className="w-8 h-8 rounded flex items-center justify-center transition-colors relative"
+            style={{
+              background: isPositionActive
+                ? lastPositionTool === "long"
+                  ? `${theme.green}25`
+                  : `${theme.red}25`
+                : "transparent",
+              color: isPositionActive
+                ? lastPositionTool === "long"
+                  ? theme.green
+                  : theme.red
+                : theme.dim,
+              border: `1px solid ${
+                isPositionActive
+                  ? lastPositionTool === "long"
+                    ? theme.green
+                    : theme.red
+                  : "transparent"
+              }`,
+            }}
+            title={`${lastPositionTool === "long" ? "Long Position (▲)" : "Short Position (▼)"} — click arrow for more`}
+          >
+            {lastPositionTool === "long" ? <LongPositionIcon /> : <ShortPositionIcon />}
+
+            {/* Tiny arrow indicating flyout menu */}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveFlyout((prev) => (prev === "positions" ? null : "positions"));
+              }}
+              className="absolute bottom-0.5 right-0.5 text-[7px] leading-none opacity-60 hover:opacity-100 cursor-pointer"
+              style={{ color: isPositionActive ? theme.text : theme.dim }}
+            >
+              ▶
+            </span>
+          </button>
+        </div>
+
+        {/* Positions Flyout Popover */}
+        {activeFlyout === "positions" && (
+          <div
+            className="absolute left-full top-0 ml-1.5 py-1 px-1 rounded border shadow-xl z-30 min-w-[155px] flex flex-col gap-0.5"
+            style={{ background: theme.panel, borderColor: theme.border }}
+          >
+            <div className="text-[9px] uppercase tracking-wider px-2 py-1 font-semibold" style={{ color: theme.dim }}>
+              Trading & Risk
+            </div>
+            <button
+              onClick={() => {
+                onSelectPositionTool("long");
+                setActiveFlyout(null);
+              }}
+              className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left hover:opacity-80 transition-colors"
+              style={{
+                background: drawMode === "long" ? `${theme.green}20` : "transparent",
+                color: drawMode === "long" ? theme.green : theme.text,
+              }}
+            >
+              <LongPositionIcon size={14} />
+              <span>Long Position</span>
+              {lastPositionTool === "long" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
+            </button>
+            <button
+              onClick={() => {
+                onSelectPositionTool("short");
+                setActiveFlyout(null);
+              }}
+              className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left hover:opacity-80 transition-colors"
+              style={{
+                background: drawMode === "short" ? `${theme.red}20` : "transparent",
+                color: drawMode === "short" ? theme.red : theme.text,
+              }}
+            >
+              <ShortPositionIcon size={14} />
+              <span>Short Position</span>
+              {lastPositionTool === "short" && <span className="ml-auto text-[9px] opacity-60">✓</span>}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* 3. Measurement Group (Delta Ruler) */}
+      {/* 5. Measurement Group (Delta Ruler) */}
       <div className="relative group/tool mb-1.5">
         <button
           onClick={() => onSetDrawMode((m) => (m === "ruler" ? "none" : "ruler"))}
@@ -176,7 +340,7 @@ export function DrawingRail({
       {/* Divider */}
       <div className="w-5 h-[1px] my-2" style={{ background: theme.border }} />
 
-      {/* 4. Bottom Utility Actions */}
+      {/* 6. Bottom Utility Actions */}
 
       {/* Magnet Mode */}
       <button
@@ -259,6 +423,40 @@ export function DrawingRail({
   );
 }
 
+function getLineToolLabel(tool: string): string {
+  switch (tool) {
+    case "trend":
+      return "Trend Line (╱)";
+    case "ray":
+      return "Extended Ray (⟶)";
+    case "hray":
+      return "Horizontal Ray (─⟶)";
+    case "level":
+      return "Horizontal Level (─)";
+    case "arrow":
+      return "Arrow (➜)";
+    default:
+      return "Line Tool";
+  }
+}
+
+function renderLineToolIcon(tool: string) {
+  switch (tool) {
+    case "trend":
+      return <TrendIcon />;
+    case "ray":
+      return <RayIcon />;
+    case "hray":
+      return <HRayIcon />;
+    case "level":
+      return <LevelIcon />;
+    case "arrow":
+      return <ArrowIcon />;
+    default:
+      return <TrendIcon />;
+  }
+}
+
 /* ---------------- Vector SVG Icons ---------------- */
 
 function TrendIcon({ size = 16 }: { size?: number }) {
@@ -267,6 +465,26 @@ function TrendIcon({ size = 16 }: { size?: number }) {
       <line x1="3" y1="13" x2="13" y2="3" />
       <circle cx="3" cy="13" r="1.5" fill="currentColor" />
       <circle cx="13" cy="3" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function RayIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2.5" y1="13.5" x2="14" y2="2" />
+      <circle cx="2.5" cy="13.5" r="1.5" fill="currentColor" />
+      <path d="M10 2h4v4" />
+    </svg>
+  );
+}
+
+function HRayIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2.5" y1="8" x2="14" y2="8" />
+      <circle cx="2.5" cy="8" r="1.5" fill="currentColor" />
+      <path d="M10.5 4.5L14 8l-3.5 3.5" />
     </svg>
   );
 }
@@ -281,10 +499,61 @@ function LevelIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function ArrowIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <line x1="2.5" y1="13.5" x2="13" y2="3" />
+      <path d="M7 3h6v6" />
+    </svg>
+  );
+}
+
+function FibIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+      <line x1="2" y1="3" x2="14" y2="3" />
+      <line x1="2" y1="7" x2="14" y2="7" />
+      <line x1="2" y1="10" x2="14" y2="10" />
+      <line x1="2" y1="13" x2="14" y2="13" />
+      <line x1="4" y1="3" x2="12" y2="13" strokeDasharray="2 2" strokeWidth="1" />
+    </svg>
+  );
+}
+
 function RectIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2.5" y="4" width="11" height="8" rx="1" />
+    </svg>
+  );
+}
+
+function ChannelIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2.5" y1="10" x2="13.5" y2="2" />
+      <line x1="2.5" y1="14" x2="13.5" y2="6" />
+      <line x1="2.5" y1="12" x2="13.5" y2="4" strokeDasharray="2 2" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function LongPositionIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <rect x="3" y="3" width="10" height="5" rx="0.5" fill="currentColor" fillOpacity="0.25" stroke="#22c55e" />
+      <rect x="3" y="8" width="10" height="5" rx="0.5" fill="currentColor" fillOpacity="0.25" stroke="#ef4444" />
+      <line x1="2" y1="8" x2="14" y2="8" stroke="#ffffff" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function ShortPositionIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <rect x="3" y="3" width="10" height="5" rx="0.5" fill="currentColor" fillOpacity="0.25" stroke="#ef4444" />
+      <rect x="3" y="8" width="10" height="5" rx="0.5" fill="currentColor" fillOpacity="0.25" stroke="#22c55e" />
+      <line x1="2" y1="8" x2="14" y2="8" stroke="#ffffff" strokeWidth="1.5" />
     </svg>
   );
 }

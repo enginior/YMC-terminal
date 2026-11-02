@@ -77,7 +77,7 @@ ymc-terminal/
 │   ├── devRenderCount.ts       # Opt-in dev-only render logger (btc-terminal:debug-renders)
 │   ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 │   ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
-│   ├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
+│   ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
 │   └── links.ts                # Canonical repository links
 ├── __tests__/                  # Unit test suite with Vitest (Spec 014)
 │   ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
@@ -85,7 +85,8 @@ ymc-terminal/
 │   ├── heikenAshi.test.ts      # Heikin Ashi OHLC smoothing
 │   ├── newsTags.test.ts        # News categorization and asset tagging
 │   ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
-│   └── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+│   ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+│   └── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
 └── package.json
 ```
 
@@ -111,11 +112,7 @@ ymc-terminal/
   to resize them; the crosshair and time axis are shared with the main chart. RSI and
   Stoch RSI are pinned to a 0–100 scale, with dashed 70/50/30 and 80/20 reference lines
   and the zone between those limits shaded (translucent `PriceBandPrimitive`).
-- Drawing tools: level lines, trendlines, and boxes, drawn by drag with a live
-  preview; persisted per symbol (localStorage), clear-all, Esc to cancel. Click a
-  drawing to select it (hover highlights, cursor becomes a pointer), then delete
-  it individually via the ✕ handle on the drawing, the toolbar's ✕ Delete button,
-  or the Delete/Backspace key; click empty space to deselect. Includes lock mode and hide/unhide mode.
+- Drawing tools (11 tools): Trendline, Extended Ray, Horizontal Ray, Horizontal Level, Arrow, Fibonacci Retracement (with golden pocket 0.618/0.382 shading and ratio prices), Parallel Channel, Long & Short Position tools (with 1:2 R:R, target/stop delta %, and 20x liquidation distance), Rectangle/Box, and Delta Ruler. Drawn by drag with a live preview; persisted per symbol (localStorage), clear-all, Esc to cancel. Click a drawing to select it (hover highlights, cursor becomes a pointer), then delete it individually via the ✕ handle on the drawing, the toolbar's ✕ Delete button, or the Delete/Backspace key; click empty space to deselect. Includes lock mode and hide/unhide mode.
 - Magnet mode (🧲 toggle): snaps the crosshair and drawing anchors to the nearest
   OHLC value of the hovered candle; off restores free, pixel-accurate movement.
 - Broker-style broken UTC day separators (DAY toggle) rendered between candles

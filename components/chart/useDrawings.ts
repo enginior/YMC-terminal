@@ -5,6 +5,7 @@ import { Theme } from "@/context/ThemeContext";
 import {
   DrawingsPrimitive,
   Drawing,
+  DrawingTool,
   hitTestDrawing,
   deleteHandlePoint,
   timeToCoordinateExtrapolated,
@@ -50,8 +51,9 @@ export function useDrawings({
   const [magnetOn, setMagnetOn] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
-  const [lastLineTool, setLastLineTool] = useState<"trend" | "level">("trend");
-  const [lastShapeTool, setLastShapeTool] = useState<"rect">("rect");
+  const [lastLineTool, setLastLineTool] = useState<"trend" | "ray" | "hray" | "level" | "arrow">("trend");
+  const [lastShapeTool, setLastShapeTool] = useState<"rect" | "channel">("rect");
+  const [lastPositionTool, setLastPositionTool] = useState<"long" | "short">("long");
   const [drawingsBySymbol, setDrawingsBySymbol] = useState<Record<string, Drawing[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -267,7 +269,12 @@ export function useDrawings({
     drawingsPrimRef.current?.setDraft(draft);
   };
 
-  const nextColor = () => {
+  const nextColor = (tool: DrawingTool) => {
+    if (tool === "ruler" || tool === "fib" || tool === "arrow" || tool === "hray")
+      return theme.yellow;
+    if (tool === "long") return theme.green;
+    if (tool === "short") return theme.red;
+    if (tool === "channel") return theme.blue;
     const palette = [theme.yellow, theme.blue, theme.red, theme.green];
     return palette[drawings.length % palette.length];
   };
@@ -328,7 +335,7 @@ export function useDrawings({
       price1: pt.price,
       time2: pt.time,
       price2: pt.price,
-      color: drawMode === "ruler" ? theme.yellow : nextColor(),
+      color: nextColor(drawMode),
     });
   };
 
@@ -365,8 +372,8 @@ export function useDrawings({
       return;
     }
 
-    // A trend/box/ruler needs a real drag; a click with no movement is treated as a cancel
-    if (draft.tool !== "level") {
+    // A trend/box/ruler/etc. needs a real drag; a click with no movement is treated as a cancel
+    if (draft.tool !== "level" && draft.tool !== "hray") {
       const el = containerRef.current;
       const chart = chartRef.current;
       const series = candleSeriesRef.current;
@@ -459,6 +466,8 @@ export function useDrawings({
     setLastLineTool,
     lastShapeTool,
     setLastShapeTool,
+    lastPositionTool,
+    setLastPositionTool,
     drawings,
     selectedId,
     removeDrawingById,

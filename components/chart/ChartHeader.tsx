@@ -267,10 +267,22 @@ export function ChartHeader({
             style={{ background: `${theme.yellow}20`, color: theme.yellow }}
           >
             <span>
-              {drawMode === "level"
-                ? "Click or drag to place a level"
+              {drawMode === "level" || drawMode === "hray"
+                ? "Click or drag to place a level/ray"
                 : drawMode === "trend"
-                ? "Drag to draw a trendline"
+                ? "Drag to draw a trend line"
+                : drawMode === "ray"
+                ? "Drag to draw an extended ray"
+                : drawMode === "arrow"
+                ? "Drag to place an arrow"
+                : drawMode === "fib"
+                ? "Drag swing high/low for Fibonacci retracement"
+                : drawMode === "channel"
+                ? "Drag to draw a parallel channel"
+                : drawMode === "long"
+                ? "Drag from Entry to Target for Long (auto 1:2 R:R)"
+                : drawMode === "short"
+                ? "Drag from Entry to Target for Short (auto 1:2 R:R)"
                 : drawMode === "rect"
                 ? "Drag to draw a box"
                 : "Drag to measure delta"}

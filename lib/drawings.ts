@@ -11,7 +11,18 @@ import type {
 } from "lightweight-charts";
 import type { CanvasRenderingTarget2D } from "fancy-canvas";
 
-export type DrawingTool = "level" | "trend" | "rect" | "ruler";
+export type DrawingTool =
+  | "level"
+  | "trend"
+  | "rect"
+  | "ruler"
+  | "ray"
+  | "hray"
+  | "arrow"
+  | "fib"
+  | "channel"
+  | "long"
+  | "short";
 
 export interface Drawing {
   id: string;
@@ -24,7 +35,7 @@ export interface Drawing {
 }
 
 export interface DrawingsStyle {
-  /** Chip background for the price label drawn on a level line. */
+  /** Chip background for price labels and badges. */
   labelBg: string;
 }
 
@@ -35,15 +46,36 @@ export interface Point {
 }
 
 export interface DrawingGeometry {
-  kind: "level" | "segment" | "rect";
-  /** Defining points in pane CSS pixels. Level points are the two pane edges. */
+  kind:
+    | "level"
+    | "segment"
+    | "rect"
+    | "ray"
+    | "hray"
+    | "arrow"
+    | "fib"
+    | "channel"
+    | "position";
+  /** Defining points in pane CSS pixels. */
   points: [Point, Point];
+  /** Optional secondary anchor (e.g. guide point for ray). */
+  guide?: Point;
 }
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 /** Click tolerance, and the gap between a drawing's end and its delete button. */
 const HIT_TOLERANCE = 6;
 const HANDLE_INSET = 14;
+
+export const FIB_RATIOS = [
+  { ratio: 0.0, color: "#9ca3af" },
+  { ratio: 0.236, color: "#60a5fa" },
+  { ratio: 0.382, color: "#34d399" },
+  { ratio: 0.5, color: "#eab308" },
+  { ratio: 0.618, color: "#f59e0b" },
+  { ratio: 0.786, color: "#f87171" },
+  { ratio: 1.0, color: "#9ca3af" },
+];
 
 /** Converts a timestamp to an X-coordinate in CSS pixels, extrapolating into whitespace/future bars if needed. */
 export function timeToCoordinateExtrapolated(
@@ -56,12 +88,17 @@ export function timeToCoordinateExtrapolated(
 
   if (!candles || candles.length === 0) return null;
   const lastCandle = candles[candles.length - 1];
-  const step = candles.length >= 2 ? Math.max(1, lastCandle.time - candles[candles.length - 2].time) : 60;
+  const step =
+    candles.length >= 2
+      ? Math.max(1, lastCandle.time - candles[candles.length - 2].time)
+      : 60;
   const lastIdx = candles.length - 1;
   const targetLogical = lastIdx + (time - lastCandle.time) / step;
 
   // 1. Try native logicalToCoordinate
-  const directLogicalCoord = timeScale.logicalToCoordinate(targetLogical as Logical);
+  const directLogicalCoord = timeScale.logicalToCoordinate(
+    targetLogical as Logical
+  );
   if (directLogicalCoord !== null) return directLogicalCoord;
 
   // 2. If logical index is outside visible viewport, extrapolate from visible logical range
@@ -82,19 +119,70 @@ export function drawingGeometry(
   candles?: { time: number }[]
 ): DrawingGeometry | null {
   const timeScale = chart.timeScale();
+  const w = timeScale.width();
+
   if (d.tool === "level") {
     const y = series.priceToCoordinate(d.price1);
     if (y === null) return null;
-    const w = timeScale.width();
     return { kind: "level", points: [{ x: 0, y }, { x: w, y }] };
   }
+
   const x1 = timeToCoordinateExtrapolated(d.time1, timeScale, candles);
-  const x2 = timeToCoordinateExtrapolated(d.time2, timeScale, candles);
   const y1 = series.priceToCoordinate(d.price1);
+  if (x1 === null || y1 === null) return null;
+
+  if (d.tool === "hray") {
+    return {
+      kind: "hray",
+      points: [{ x: x1, y: y1 }, { x: Math.max(x1, w), y: y1 }],
+    };
+  }
+
+  const x2 = timeToCoordinateExtrapolated(d.time2, timeScale, candles);
   const y2 = series.priceToCoordinate(d.price2);
-  if (x1 === null || x2 === null || y1 === null || y2 === null) return null;
+  if (x2 === null || y2 === null) return null;
+
+  if (d.tool === "ray") {
+    if (Math.abs(x2 - x1) < 0.001) {
+      const endY = y2 >= y1 ? 10000 : -10000;
+      return {
+        kind: "ray",
+        points: [{ x: x1, y: y1 }, { x: x1, y: endY }],
+        guide: { x: x2, y: y2 },
+      };
+    }
+    const t = x2 > x1 ? (w - x1) / (x2 - x1) : (0 - x1) / (x2 - x1);
+    const endX = x2 > x1 ? w : 0;
+    const endY = y1 + t * (y2 - y1);
+    return {
+      kind: "ray",
+      points: [{ x: x1, y: y1 }, { x: endX, y: endY }],
+      guide: { x: x2, y: y2 },
+    };
+  }
+
+  if (d.tool === "trend") {
+    return { kind: "segment", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+  }
+
+  if (d.tool === "arrow") {
+    return { kind: "arrow", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+  }
+
+  if (d.tool === "fib") {
+    return { kind: "fib", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+  }
+
+  if (d.tool === "channel") {
+    return { kind: "channel", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+  }
+
+  if (d.tool === "long" || d.tool === "short") {
+    return { kind: "position", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+  }
+
   return {
-    kind: d.tool === "trend" ? "segment" : "rect",
+    kind: "rect",
     points: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
   };
 }
@@ -108,7 +196,7 @@ function distanceToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
-/** True when a point is on / near a drawing. Rectangles hit on edges or inside. */
+/** True when a point is on / near a drawing. */
 export function hitTestDrawing(
   d: Drawing,
   p: Point,
@@ -119,11 +207,68 @@ export function hitTestDrawing(
 ): boolean {
   const g = drawingGeometry(d, chart, series, candles);
   if (!g) return false;
+
   if (g.kind === "level") return Math.abs(p.y - g.points[0].y) <= tolerance;
 
-  const [a, b] = g.points;
-  if (g.kind === "segment") return distanceToSegment(p, a, b) <= tolerance;
+  if (g.kind === "hray") {
+    const minX = Math.min(g.points[0].x, g.points[1].x) - tolerance;
+    const maxX = Math.max(g.points[0].x, g.points[1].x) + tolerance;
+    return p.x >= minX && p.x <= maxX && Math.abs(p.y - g.points[0].y) <= tolerance;
+  }
 
+  const [a, b] = g.points;
+
+  if (g.kind === "segment" || g.kind === "ray" || g.kind === "arrow") {
+    return distanceToSegment(p, a, b) <= tolerance;
+  }
+
+  if (g.kind === "fib") {
+    if (distanceToSegment(p, a, b) <= tolerance) return true;
+    const minX = Math.min(a.x, b.x) - tolerance;
+    const maxX = Math.max(a.x, b.x) + 70 + tolerance;
+    if (p.x >= minX && p.x <= maxX) {
+      for (const lvl of FIB_RATIOS) {
+        const fibY = a.y + (b.y - a.y) * lvl.ratio;
+        if (Math.abs(p.y - fibY) <= tolerance) return true;
+      }
+    }
+    return false;
+  }
+
+  if (g.kind === "channel") {
+    if (distanceToSegment(p, a, b) <= tolerance) return true;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return false;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const h = Math.max(16, Math.abs(b.y - a.y) * 0.4);
+    const pA1 = { x: a.x + nx * h, y: a.y + ny * h };
+    const pB1 = { x: b.x + nx * h, y: b.y + ny * h };
+    const pA2 = { x: a.x - nx * h, y: a.y - ny * h };
+    const pB2 = { x: b.x - nx * h, y: b.y - ny * h };
+    if (distanceToSegment(p, pA1, pB1) <= tolerance) return true;
+    if (distanceToSegment(p, pA2, pB2) <= tolerance) return true;
+    const dotL = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (len * len);
+    const dotW = Math.abs((p.x - a.x) * nx + (p.y - a.y) * ny);
+    return dotL >= -0.05 && dotL <= 1.05 && dotW <= h + tolerance;
+  }
+
+  if (g.kind === "position") {
+    const isLong = d.tool === "long";
+    const entryY = a.y;
+    const tpY = b.y;
+    const slDist = Math.abs(tpY - entryY) / 2;
+    const slY = isLong ? entryY + slDist : entryY - slDist;
+    const minY = Math.min(entryY, tpY, slY) - tolerance;
+    const maxY = Math.max(entryY, tpY, slY) + tolerance;
+    const minX = Math.min(a.x, b.x) - tolerance;
+    const maxX = Math.max(a.x, b.x, minX + 80) + tolerance;
+    return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+  }
+
+  // Rect or Ruler
   const x0 = Math.min(a.x, b.x) - tolerance;
   const x1 = Math.max(a.x, b.x) + tolerance;
   const y0 = Math.min(a.y, b.y) - tolerance;
@@ -140,9 +285,20 @@ export function deleteHandlePoint(
 ): Point | null {
   const g = drawingGeometry(d, chart, series, candles);
   if (!g) return null;
+
   if (g.kind === "level") {
-    // Keep clear of the right-edge price chip.
     return { x: HANDLE_INSET, y: g.points[0].y };
+  }
+  if (g.kind === "hray") {
+    return { x: g.points[0].x + HANDLE_INSET + 10, y: g.points[0].y };
+  }
+  if (g.kind === "ray") {
+    return g.guide ? { x: g.guide.x, y: g.guide.y } : { x: g.points[0].x, y: g.points[0].y };
+  }
+  if (g.kind === "position") {
+    const minX = Math.min(g.points[0].x, g.points[1].x);
+    const boxW = Math.max(90, Math.abs(g.points[1].x - g.points[0].x));
+    return { x: minX + boxW, y: g.points[0].y };
   }
   const [a, b] = g.points;
   return { x: b.x, y: b.y };
@@ -169,13 +325,7 @@ class DrawingsPaneView implements IPrimitivePaneView {
 }
 
 /**
- * Renders the user's level / trend / box drawings straight to the pane canvas.
- *
- * Line series can't do this job: `setData` collapses same-time points, so a
- * vertical box edge or a full-width level won't render, and a rectangle has no
- * series representation at all. A primitive also lets the in-progress draft be
- * painted without touching React state on every pointer move, and lets a
- * selected drawing show editable-looking handles like a charting platform.
+ * Renders the user's drawings straight to the pane canvas.
  */
 export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
   private chart: IChartApi | null = null;
@@ -191,7 +341,6 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
   private readonly views: IPrimitivePaneView[];
 
   constructor() {
-    // Stable array reference: the library caches on identity
     this.views = [new DrawingsPaneView(this)];
   }
 
@@ -205,13 +354,11 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     this.requestUpdate();
   }
 
-  /** The shape currently being dragged out; null when idle. */
   setDraft(draft: Drawing | null): void {
     this.draft = draft;
     this.requestUpdate();
   }
 
-  /** Which drawing is under the cursor and which is selected. */
   setInteraction(hoveredId: string | null, selectedId: string | null): void {
     this.hoveredId = hoveredId;
     this.selectedId = selectedId;
@@ -293,14 +440,209 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.stroke();
           context.setLineDash([]);
           this.drawLabel(context, px(b.x), py(b.y), item.price1, item.color, hx, vy);
-        } else if (g.kind === "segment") {
+        } else if (g.kind === "hray") {
+          context.setLineDash(isDraft ? dash : [6 * hx, 3 * hx]);
+          context.beginPath();
+          context.moveTo(px(a.x), py(a.y));
+          context.lineTo(px(b.x), py(b.y));
+          context.stroke();
+          context.setLineDash([]);
+          this.drawLabel(context, px(b.x), py(b.y), item.price1, item.color, hx, vy);
+        } else if (g.kind === "segment" || g.kind === "ray") {
           context.setLineDash(isDraft ? dash : []);
           context.beginPath();
           context.moveTo(px(a.x), py(a.y));
           context.lineTo(px(b.x), py(b.y));
           context.stroke();
           context.setLineDash([]);
+
+          // Ray guide point dot
+          if (g.kind === "ray" && g.guide) {
+            context.beginPath();
+            context.arc(px(g.guide.x), py(g.guide.y), 3 * hx, 0, Math.PI * 2);
+            context.fillStyle = item.color;
+            context.fill();
+          }
+        } else if (g.kind === "arrow") {
+          context.setLineDash(isDraft ? dash : []);
+          context.beginPath();
+          context.moveTo(px(a.x), py(a.y));
+          context.lineTo(px(b.x), py(b.y));
+          context.stroke();
+          context.setLineDash([]);
+
+          // Vector arrowhead at B
+          const angle = Math.atan2(b.y - a.y, b.x - a.x);
+          const headLen = 10 * hx;
+          context.beginPath();
+          context.moveTo(px(b.x), py(b.y));
+          context.lineTo(
+            px(b.x) - headLen * Math.cos(angle - Math.PI / 6),
+            py(b.y) - headLen * Math.sin(angle - Math.PI / 6)
+          );
+          context.lineTo(
+            px(b.x) - headLen * Math.cos(angle + Math.PI / 6),
+            py(b.y) - headLen * Math.sin(angle + Math.PI / 6)
+          );
+          context.closePath();
+          context.fillStyle = item.color;
+          context.fill();
+        } else if (g.kind === "fib") {
+          const startX = Math.min(px(a.x), px(b.x));
+          const endX = Math.max(px(a.x), px(b.x)) + 70 * hx;
+
+          // Shaded Golden Pocket (0.382 to 0.618)
+          const y0382 = py(a.y + (b.y - a.y) * 0.382);
+          const y0618 = py(a.y + (b.y - a.y) * 0.618);
+          context.fillStyle = "rgba(245, 158, 11, 0.12)";
+          context.fillRect(
+            startX,
+            Math.min(y0382, y0618),
+            endX - startX,
+            Math.abs(y0618 - y0382)
+          );
+
+          // Connecting baseline
+          context.setLineDash(dash);
+          context.strokeStyle = `${item.color}80`;
+          context.lineWidth = 1 * hx;
+          context.beginPath();
+          context.moveTo(px(a.x), py(a.y));
+          context.lineTo(px(b.x), py(b.y));
+          context.stroke();
+          context.setLineDash([]);
+
+          // Fibonacci levels
+          for (const lvl of FIB_RATIOS) {
+            const lvlY = py(a.y + (b.y - a.y) * lvl.ratio);
+            const lvlPrice = item.price1 + (item.price2 - item.price1) * lvl.ratio;
+
+            context.strokeStyle = lvl.color;
+            context.lineWidth = Math.max(1, (lvl.ratio === 0.618 ? 1.6 : 1) * hx);
+            context.beginPath();
+            context.moveTo(startX, lvlY);
+            context.lineTo(endX, lvlY);
+            context.stroke();
+
+            // Level text label
+            const labelStr = `${lvl.ratio} ($${lvlPrice.toFixed(2)})`;
+            context.font = `${Math.round(9 * vy)}px ${MONO}`;
+            context.fillStyle = lvl.color;
+            context.fillText(labelStr, startX + 4 * hx, lvlY - 6 * vy);
+          }
+        } else if (g.kind === "channel") {
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const len = Math.hypot(dx, dy);
+          if (len > 0) {
+            const nx = -dy / len;
+            const ny = dx / len;
+            const h = Math.max(16, Math.abs(b.y - a.y) * 0.4);
+
+            const pA1 = { x: px(a.x + nx * h), y: py(a.y + ny * h) };
+            const pB1 = { x: px(b.x + nx * h), y: py(b.y + ny * h) };
+            const pA2 = { x: px(a.x - nx * h), y: py(a.y - ny * h) };
+            const pB2 = { x: px(b.x - nx * h), y: py(b.y - ny * h) };
+
+            // Fill channel polygon
+            context.globalAlpha = isDraft ? 0.08 : 0.12;
+            context.beginPath();
+            context.moveTo(pA1.x, pA1.y);
+            context.lineTo(pB1.x, pB1.y);
+            context.lineTo(pB2.x, pB2.y);
+            context.lineTo(pA2.x, pA2.y);
+            context.closePath();
+            context.fillStyle = item.color;
+            context.fill();
+
+            // Boundary strokes
+            context.globalAlpha = 1;
+            context.strokeStyle = item.color;
+            context.lineWidth = Math.max(1, Math.round(1.5 * hx));
+            context.beginPath();
+            context.moveTo(pA1.x, pA1.y);
+            context.lineTo(pB1.x, pB1.y);
+            context.moveTo(pA2.x, pA2.y);
+            context.lineTo(pB2.x, pB2.y);
+            context.stroke();
+
+            // Centerline
+            context.setLineDash(dash);
+            context.beginPath();
+            context.moveTo(px(a.x), py(a.y));
+            context.lineTo(px(b.x), py(b.y));
+            context.stroke();
+            context.setLineDash([]);
+          }
+        } else if (g.kind === "position") {
+          const isLong = item.tool === "long";
+          const entryPrice = item.price1;
+          const tpPrice = isLong
+            ? Math.max(item.price1 * 1.001, item.price2)
+            : Math.min(item.price1 * 0.999, item.price2);
+          const targetGain = Math.abs(tpPrice - entryPrice);
+          const targetPct = (targetGain / entryPrice) * 100;
+          const stopLoss = targetGain / 2; // Default 1:2 R:R
+          const slPrice = isLong ? entryPrice - stopLoss : entryPrice + stopLoss;
+          const slPct = (stopLoss / entryPrice) * 100;
+
+          const minX = Math.min(px(a.x), px(b.x));
+          const boxW = Math.max(90 * hx, Math.abs(px(b.x) - px(a.x)));
+          const yEntry = py(a.y);
+          const yTP = py(series.priceToCoordinate(tpPrice) ?? b.y);
+          const ySL = py(
+            series.priceToCoordinate(slPrice) ??
+              (isLong ? a.y + Math.abs(b.y - a.y) / 2 : a.y - Math.abs(b.y - a.y) / 2)
+          );
+
+          // 1. Green Take Profit Target Region
+          const tpBoxY = Math.min(yEntry, yTP);
+          const tpBoxH = Math.abs(yEntry - yTP);
+          context.fillStyle = "rgba(34, 197, 94, 0.18)";
+          context.fillRect(minX, tpBoxY, boxW, tpBoxH);
+          context.strokeStyle = "#22c55e";
+          context.lineWidth = 1.2 * hx;
+          context.strokeRect(minX, tpBoxY, boxW, tpBoxH);
+
+          // TP text banner
+          context.font = `${Math.round(9 * vy)}px ${MONO}`;
+          context.fillStyle = "#22c55e";
+          context.fillText(
+            `Target: +$${targetGain.toFixed(2)} (+${targetPct.toFixed(2)}%)`,
+            minX + 6 * hx,
+            tpBoxY + 10 * vy
+          );
+          context.fillText(`R:R 2.00`, minX + 6 * hx, tpBoxY + 22 * vy);
+
+          // 2. Red Stop Loss Region
+          const slBoxY = Math.min(yEntry, ySL);
+          const slBoxH = Math.abs(yEntry - ySL);
+          context.fillStyle = "rgba(239, 68, 68, 0.18)";
+          context.fillRect(minX, slBoxY, boxW, slBoxH);
+          context.strokeStyle = "#ef4444";
+          context.lineWidth = 1.2 * hx;
+          context.strokeRect(minX, slBoxY, boxW, slBoxH);
+
+          // SL text banner
+          context.fillStyle = "#ef4444";
+          context.fillText(
+            `Stop: -$${stopLoss.toFixed(2)} (-${slPct.toFixed(2)}%)`,
+            minX + 6 * hx,
+            slBoxY + 10 * vy
+          );
+          context.fillText(`Liq (20x): ~4.5%`, minX + 6 * hx, slBoxY + 22 * vy);
+
+          // 3. Entry divider line
+          context.strokeStyle = "#ffffff";
+          context.lineWidth = 1.5 * hx;
+          context.beginPath();
+          context.moveTo(minX, yEntry);
+          context.lineTo(minX + boxW, yEntry);
+          context.stroke();
+          context.fillStyle = "#ffffff";
+          context.fillText(`Entry: $${entryPrice.toFixed(2)}`, minX + 6 * hx, yEntry - 6 * vy);
         } else {
+          // Standard rect or ruler
           const rx = Math.min(px(a.x), px(b.x));
           const ry = Math.min(py(a.y), py(b.y));
           const rw = Math.abs(px(b.x) - px(a.x));
@@ -313,7 +655,6 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           context.setLineDash([]);
 
           if (item.tool === "ruler") {
-            // Draw diagonal line connecting anchor points
             context.setLineDash(dash);
             context.beginPath();
             context.moveTo(px(a.x), py(a.y));
@@ -321,13 +662,14 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
             context.stroke();
             context.setLineDash([]);
 
-            // Calculate price delta and percentage
             const deltaP = item.price2 - item.price1;
             const deltaPct = item.price1 !== 0 ? (deltaP / item.price1) * 100 : 0;
             const sign = deltaP >= 0 ? "+" : "";
-            const priceStr = `${sign}$${deltaP.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${sign}${deltaPct.toFixed(2)}%)`;
+            const priceStr = `${sign}$${deltaP.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} (${sign}${deltaPct.toFixed(2)}%)`;
 
-            // Draw delta badge in center of measurement region
             const midX = rx + rw / 2;
             const midY = ry + rh / 2;
             const textW = context.measureText(priceStr).width;
@@ -372,7 +714,14 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     const dot = Math.round(3.5 * hx);
 
     if (g.kind !== "level") {
-      for (const p of g.points) {
+      const handlePoints =
+        g.kind === "ray" && g.guide
+          ? [g.points[0], g.guide]
+          : g.kind === "hray"
+          ? [g.points[0]]
+          : g.points;
+
+      for (const p of handlePoints) {
         context.beginPath();
         context.arc(p.x * hx, p.y * vy, dot, 0, Math.PI * 2);
         context.fillStyle = this.style.labelBg;
@@ -408,7 +757,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     context.stroke();
   }
 
-  /** Price chip pinned to the right edge of a level line. */
+  /** Price chip pinned to the right edge of a level or horizontal ray. */
   private drawLabel(
     context: CanvasRenderingContext2D,
     right: number,

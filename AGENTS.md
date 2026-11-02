@@ -75,7 +75,7 @@ lib/
 ├── devRenderCount.ts       # Opt-in dev-only render logger (btc-terminal:debug-renders)
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
-├── drawings.ts             # Level / trend / box / ruler drawings + live draft, series primitive
+├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
 └── links.ts                # Canonical repository links
 __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
@@ -83,7 +83,8 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── heikenAshi.test.ts      # Heikin Ashi OHLC smoothing
 ├── newsTags.test.ts        # News categorization and asset tagging
 ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
-└── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+└── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
 ```
 
 ## Notable Constraints

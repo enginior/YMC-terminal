@@ -140,6 +140,10 @@ function PriceChart({
     setIsHidden,
     lastLineTool,
     setLastLineTool,
+    lastShapeTool,
+    setLastShapeTool,
+    lastPositionTool,
+    setLastPositionTool,
     drawings,
     selectedId,
     removeDrawingById,
@@ -239,6 +243,18 @@ function PriceChart({
           lastLineTool={lastLineTool}
           onSelectLineTool={(tool) => {
             setLastLineTool(tool);
+            setDrawMode((current) => (current === tool ? "none" : tool));
+            if (isHidden) setIsHidden(false);
+          }}
+          lastShapeTool={lastShapeTool}
+          onSelectShapeTool={(tool) => {
+            setLastShapeTool(tool);
+            setDrawMode((current) => (current === tool ? "none" : tool));
+            if (isHidden) setIsHidden(false);
+          }}
+          lastPositionTool={lastPositionTool}
+          onSelectPositionTool={(tool) => {
+            setLastPositionTool(tool);
             setDrawMode((current) => (current === tool ? "none" : tool));
             if (isHidden) setIsHidden(false);
           }}
