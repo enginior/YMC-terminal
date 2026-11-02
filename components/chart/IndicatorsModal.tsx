@@ -46,13 +46,17 @@ export function IndicatorsModal({
     );
   }, [search]);
 
-  // Split into Overlays and Oscillators
+  // Split into Overlays, Oscillators, and Perpetuals/Order Flow
   const overlays = useMemo(
     () => filteredMetas.filter((m) => m.category === "Overlay"),
     [filteredMetas]
   );
   const oscillators = useMemo(
     () => filteredMetas.filter((m) => m.category === "Oscillator"),
+    [filteredMetas]
+  );
+  const perps = useMemo(
+    () => filteredMetas.filter((m) => m.category === "Perpetual" || m.category === "Order Flow"),
     [filteredMetas]
   );
 
@@ -182,6 +186,31 @@ export function IndicatorsModal({
                   </div>
                   <div className="space-y-1.5">
                     {oscillators.map((meta) => (
+                      <IndicatorRow
+                        key={meta.id}
+                        meta={meta}
+                        isActive={activeIndicators.has(meta.id)}
+                        onToggle={() => onToggleIndicator(meta.id)}
+                        theme={theme}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {perps.length > 0 && (
+                <div>
+                  <div
+                    className="text-[10px] uppercase font-bold tracking-wider mb-2 px-1 flex items-center justify-between"
+                    style={{ color: theme.dim }}
+                  >
+                    <span>Perpetuals & Order Flow (Sub-Panes)</span>
+                    <span className="text-[9px] font-normal opacity-70">
+                      Open Interest, Funding & Net Volume Delta
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {perps.map((meta) => (
                       <IndicatorRow
                         key={meta.id}
                         meta={meta}

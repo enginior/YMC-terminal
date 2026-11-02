@@ -32,7 +32,8 @@ ymc-terminal/
 │       ├── comparison/route.ts # Multi-symbol ticker + 24h sparklines (powers Watchlist & Heatmap)
 │       ├── news/route.ts       # Multi-source RSS with keyword sentiment
 │       ├── calendar/route.ts   # Keyless high-impact macro economic calendar
-│       └── correlation/route.ts# BTC/ETH 30d rolling correlation
+│       ├── correlation/route.ts# BTC/ETH 30d rolling correlation
+│       └── derivatives/route.ts# Binance Futures historical OI & Funding rate proxy
 ├── components/
 │   ├── Panel.tsx               # Wrapper: drag grip + height/span
 │   ├── CommandBar.tsx          # Top bar: logo, search, settings, clock
@@ -254,7 +255,7 @@ Deferred rather than abandoned. Ordered roughly by value per unit of effort. See
 - Never invent fallback data: a downed feed shows the last real value plus a
   disconnected indicator
 - lightweight-charts recreates on theme change so new candle colors apply
-- RSI/MACD sub-panes are created with `addPane(true)` so they keep a user-resized
+- RSI/MACD/Stoch/OI/Funding/CVD sub-panes are created with `addPane(true)` so they keep a user-resized
   height; series are rebuilt only when the indicator set or theme changes, never on
   a data tick
 - Default timeframe is 1h

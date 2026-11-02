@@ -218,3 +218,25 @@ export function stochRsi(
   const d = smaSeries(k, smoothD);
   return { k, d };
 }
+
+/**
+ * Cumulative Volume Delta (CVD).
+ * Measures continuous net aggressive market order flow (buying vs selling pressure).
+ */
+export function cvd(data: Candle[]): (number | null)[] {
+  const result: (number | null)[] = [];
+  let cum = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const c = data[i];
+    const range = c.high - c.low;
+    let delta = 0;
+    if (range > 0) {
+      const ratio = (c.close - c.open) / range;
+      delta = ratio * c.volume;
+    }
+    cum += delta;
+    result.push(cum);
+  }
+  return result;
+}

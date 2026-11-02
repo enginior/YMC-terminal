@@ -8,7 +8,7 @@ export const FAVORITE_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as cons
 export const MORE_TIMEFRAMES = ["30m", "2h"] as const;
 
 export type OverlayIndicator = "sma" | "ema" | "bollinger";
-export type PaneIndicator = "rsi" | "macd" | "stochrsi";
+export type PaneIndicator = "rsi" | "macd" | "stochrsi" | "oi" | "funding" | "cvd";
 export type IndicatorType = OverlayIndicator | PaneIndicator;
 
 /** How the main price pane draws the series. */
@@ -37,15 +37,18 @@ export const INDICATOR_LABELS: Record<IndicatorType, string> = {
   rsi: "RSI (14)",
   macd: "MACD (12,26,9)",
   stochrsi: "Stoch RSI (14,14,3,3)",
+  oi: "Open Interest (OI)",
+  funding: "Funding Rate History",
+  cvd: "Cumulative Volume Delta (CVD)",
 };
 
 export const OVERLAYS: OverlayIndicator[] = ["sma", "ema", "bollinger"];
-export const PANES: PaneIndicator[] = ["rsi", "macd", "stochrsi"];
+export const PANES: PaneIndicator[] = ["rsi", "macd", "stochrsi", "oi", "funding", "cvd"];
 
 export interface IndicatorMeta {
   id: IndicatorType;
   name: string;
-  category: "Overlay" | "Oscillator";
+  category: "Overlay" | "Oscillator" | "Perpetual" | "Order Flow";
   shortDesc: string;
   formula: string;
 }
@@ -93,6 +96,27 @@ export const INDICATOR_METAS: IndicatorMeta[] = [
     shortDesc: "Stochastic applied to RSI for rapid cyclical turns",
     formula: "14, 14, 3, 3 with 80/20 shaded reference bounds",
   },
+  {
+    id: "oi",
+    name: "Open Interest (OI)",
+    category: "Perpetual",
+    shortDesc: "Aggregated perpetual contract open interest value",
+    formula: "Binance Futures USD Open Interest (sumOpenInterestValue)",
+  },
+  {
+    id: "funding",
+    name: "Funding Rate History",
+    category: "Perpetual",
+    shortDesc: "8-hour perpetual funding rate settlement history",
+    formula: "Binance Futures 8h Funding Rate (%) with zero baseline",
+  },
+  {
+    id: "cvd",
+    name: "Cumulative Volume Delta (CVD)",
+    category: "Order Flow",
+    shortDesc: "Net aggressive buyer vs seller order flow",
+    formula: "Cumulative Σ ((Close - Open) / (High - Low)) × Volume",
+  },
 ];
 
 /** Shape of the memoised indicator values. */
@@ -105,6 +129,7 @@ export type ComputedValues = {
   rsi: (number | null)[];
   macd: { macdLine: (number | null)[]; signalLine: (number | null)[]; histogram: (number | null)[] };
   stochRsi: { k: (number | null)[]; d: (number | null)[] };
+  cvd: (number | null)[];
 };
 
 /** Overlay line definitions: theme colour slot + value accessor. */

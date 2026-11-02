@@ -42,6 +42,7 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | 011 | [Real-time candles from Binance kline stream](./011-live-kline-stream.md) | Done |
 | 008 | [Drawing properties & history (Undo/Redo)](./008-drawing-properties-history.md) | Done |
 | 013 | [Real-time liquidation markers on chart](./013-liquidation-markers.md) | Done |
+| 012 | [Open Interest, Funding Rate & CVD sub-panes](./012-oi-funding-cvd-panes.md) | Done |
 
 **Recommended order:** 000 → 001 → 002 → 003 (the two small filters first, so the
 large `page.tsx` refactor in 003 lands last and doesn't conflict).

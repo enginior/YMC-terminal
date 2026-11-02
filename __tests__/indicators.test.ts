@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sma, ema, rsi, macd, bollingerBands, stochRsi } from "@/lib/indicators";
+import { sma, ema, rsi, macd, bollingerBands, stochRsi, cvd } from "@/lib/indicators";
 import { Candle } from "@/lib/types";
 
 function makeCandles(prices: number[]): Candle[] {
@@ -139,6 +139,38 @@ describe("technical indicators", () => {
         expect(val).toBeGreaterThanOrEqual(0);
         expect(val).toBeLessThanOrEqual(100);
       });
+    });
+  });
+
+  describe("cvd (Cumulative Volume Delta)", () => {
+    it("accumulates positive flow for bullish candles and negative flow for bearish candles", () => {
+      const candles: Candle[] = [
+        { time: 100, open: 100, high: 110, low: 90, close: 105, volume: 1000 }, // range=20, close-open=5 -> delta = (5/20)*1000 = +250, cum = 250
+        { time: 101, open: 105, high: 115, low: 95, close: 95, volume: 2000 },  // range=20, close-open=-10 -> delta = (-10/20)*2000 = -1000, cum = -750
+        { time: 102, open: 95, high: 105, low: 95, close: 105, volume: 500 },   // range=10, close-open=10 -> delta = (10/10)*500 = +500, cum = -250
+      ];
+
+      const res = cvd(candles);
+      expect(res).toHaveLength(3);
+      expect(res[0]).toBeCloseTo(250);
+      expect(res[1]).toBeCloseTo(-750);
+      expect(res[2]).toBeCloseTo(-250);
+    });
+
+    it("handles zero range candles safely without division by zero or NaN", () => {
+      const flatCandles: Candle[] = [
+        { time: 200, open: 100, high: 100, low: 100, close: 100, volume: 500 },
+        { time: 201, open: 100, high: 105, low: 95, close: 105, volume: 100 }, // range=10, close-open=5 -> delta = (5/10)*100 = +50, cum = 50
+      ];
+      const res = cvd(flatCandles);
+      expect(res).toHaveLength(2);
+      expect(res[0]).toBe(0);
+      expect(Number.isNaN(res[0])).toBe(false);
+      expect(res[1]).toBeCloseTo(50);
+    });
+
+    it("returns empty array when candle data is empty", () => {
+      expect(cvd([])).toEqual([]);
     });
   });
 });

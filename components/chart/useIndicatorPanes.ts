@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import {
   LineSeries,
   HistogramSeries,
+  AreaSeries,
   LineStyle,
   IChartApi,
   ISeriesApi,
@@ -12,7 +13,7 @@ import {
 } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { Theme } from "@/context/ThemeContext";
-import { sma, ema, rsi, macd, bollingerBands, stochRsi } from "@/lib/indicators";
+import { sma, ema, rsi, macd, bollingerBands, stochRsi, cvd } from "@/lib/indicators";
 import { PriceBandPrimitive } from "@/lib/bands";
 import {
   IndicatorType,
@@ -27,6 +28,21 @@ interface UseIndicatorPanesOptions {
   candles: Candle[];
   theme: Theme;
   chartEpoch: number;
+  symbol: string;
+  timeframe: string;
+}
+
+interface DerivativesData {
+  openInterest: Array<{ time: number; value: number; amount: number }>;
+  fundingRates: Array<{ time: number; rate: number; markPrice: number }>;
+}
+
+function dedupeAndSort<T extends { time: UTCTimestamp }>(data: T[]): T[] {
+  const map = new Map<number, T>();
+  for (const item of data) {
+    map.set(item.time as number, item);
+  }
+  return Array.from(map.values()).sort((a, b) => (a.time as number) - (b.time as number));
 }
 
 export function useIndicatorPanes({
@@ -34,15 +50,50 @@ export function useIndicatorPanes({
   candles,
   theme,
   chartEpoch,
+  symbol,
+  timeframe,
 }: UseIndicatorPanesOptions) {
   const [activeIndicators, setActiveIndicators] = useState<Set<IndicatorType>>(new Set());
+  const [derivativesData, setDerivativesData] = useState<DerivativesData | null>(null);
+  const derivativesDataRef = useRef<DerivativesData | null>(null);
+  derivativesDataRef.current = derivativesData;
 
   // Series created for indicators, torn down and rebuilt when the set changes.
   const indicatorRefs = useRef<Map<IndicatorType, ISeriesApi<any>[]>>(new Map());
 
-  // Sub-panes for RSI / MACD (v5 native panes), kept across theme changes so a
+  // Sub-panes for RSI / MACD / Stoch / OI / Funding / CVD (v5 native panes), kept across theme changes so a
   // user-resized pane keeps its height until the indicator is switched off.
   const paneRefs = useRef<Map<PaneIndicator, IPaneApi<Time>>>(new Map());
+
+  // Fetch derivatives data (OI, Funding) when respective indicators are enabled
+  useEffect(() => {
+    const needsDerivatives = activeIndicators.has("oi") || activeIndicators.has("funding");
+    if (!needsDerivatives) return;
+
+    let cancelled = false;
+    async function fetchDerivatives() {
+      try {
+        const res = await fetch(
+          `/api/derivatives?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data) {
+          setDerivativesData({
+            openInterest: Array.isArray(data.openInterest) ? data.openInterest : [],
+            fundingRates: Array.isArray(data.fundingRates) ? data.fundingRates : [],
+          });
+        }
+      } catch {}
+    }
+
+    fetchDerivatives();
+    const timer = setInterval(fetchDerivatives, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeIndicators, symbol, timeframe]);
 
   const computed = useMemo(() => {
     if (candles.length === 0) return null;
@@ -55,6 +106,7 @@ export function useIndicatorPanes({
       rsi: rsi(candles, 14),
       macd: macd(candles),
       stochRsi: stochRsi(candles, 14, 14, 3, 3),
+      cvd: cvd(candles),
     };
   }, [candles]);
 
@@ -241,47 +293,181 @@ export function useIndicatorPanes({
       );
       indicatorRefs.current.set("stochrsi", [kSeries, dSeries]);
     }
+
+    if (activeIndicators.has("oi")) {
+      const pane = ensurePane("oi");
+      const oiSeries = pane.addSeries(AreaSeries, {
+        topColor: `${theme.blue}40`,
+        bottomColor: `${theme.blue}05`,
+        lineColor: theme.blue,
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: "OI",
+        priceFormat: {
+          type: "custom",
+          formatter: (price: number) => {
+            if (price >= 1e9) return `$${(price / 1e9).toFixed(2)}B`;
+            if (price >= 1e6) return `$${(price / 1e6).toFixed(2)}M`;
+            if (price >= 1e3) return `$${(price / 1e3).toFixed(1)}k`;
+            return `$${price.toFixed(0)}`;
+          },
+        },
+      });
+      if (derivativesDataRef.current?.openInterest && derivativesDataRef.current.openInterest.length > 0) {
+        const points = dedupeAndSort(
+          derivativesDataRef.current.openInterest.map((d) => ({
+            time: d.time as UTCTimestamp,
+            value: d.value,
+          }))
+        );
+        oiSeries.setData(points);
+      }
+      indicatorRefs.current.set("oi", [oiSeries]);
+    }
+
+    if (activeIndicators.has("funding")) {
+      const pane = ensurePane("funding");
+      const fundingSeries = pane.addSeries(HistogramSeries, {
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: "Funding",
+        priceFormat: {
+          type: "custom",
+          formatter: (val: number) => `${val >= 0 ? "+" : ""}${val.toFixed(4)}%`,
+        },
+      });
+      fundingSeries.createPriceLine({
+        price: 0,
+        color: theme.dim,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        lineVisible: true,
+        axisLabelVisible: true,
+        title: "0.00%",
+      });
+      if (derivativesDataRef.current?.fundingRates && derivativesDataRef.current.fundingRates.length > 0) {
+        const points = dedupeAndSort(
+          derivativesDataRef.current.fundingRates.map((d) => ({
+            time: d.time as UTCTimestamp,
+            value: d.rate,
+            color: d.rate >= 0 ? `${theme.green}cc` : `${theme.red}cc`,
+          }))
+        );
+        fundingSeries.setData(points);
+      }
+      indicatorRefs.current.set("funding", [fundingSeries]);
+    }
+
+    if (activeIndicators.has("cvd")) {
+      const pane = ensurePane("cvd");
+      const cvdSeries = pane.addSeries(LineSeries, {
+        color: "#38bdf8",
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: "CVD",
+        priceFormat: {
+          type: "custom",
+          formatter: (price: number) => {
+            const sign = price >= 0 ? "+" : "-";
+            const abs = Math.abs(price);
+            if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
+            if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}M`;
+            if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)}k`;
+            return `${sign}${abs.toFixed(0)}`;
+          },
+        },
+      });
+      cvdSeries.createPriceLine({
+        price: 0,
+        color: theme.dim,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        lineVisible: true,
+        axisLabelVisible: true,
+        title: "0",
+      });
+      cvdSeries.setData(line(comp.cvd));
+      indicatorRefs.current.set("cvd", [cvdSeries]);
+    }
   }, [activeIndicators, theme, chartEpoch, line, histData, chartRef]);
 
   /* ---------------- data effect: push fresh values on every tick ---------------- */
 
   useEffect(() => {
-    if (!computed) return;
-
-    OVERLAYS.forEach((key) => {
-      const entry = indicatorRefs.current.get(key);
-      if (!entry) return;
-      OVERLAY_SPECS[key].forEach((spec, i) => {
-        try {
-          entry[i]?.setData(line(spec.values(computed)));
-        } catch {}
+    if (computed) {
+      OVERLAYS.forEach((key) => {
+        const entry = indicatorRefs.current.get(key);
+        if (!entry) return;
+        OVERLAY_SPECS[key].forEach((spec, i) => {
+          try {
+            entry[i]?.setData(line(spec.values(computed)));
+          } catch {}
+        });
       });
-    });
 
-    const rsiEntry = indicatorRefs.current.get("rsi");
-    if (rsiEntry?.[0]) {
-      try {
-        rsiEntry[0].setData(line(computed.rsi));
-      } catch {}
+      const rsiEntry = indicatorRefs.current.get("rsi");
+      if (rsiEntry?.[0]) {
+        try {
+          rsiEntry[0].setData(line(computed.rsi));
+        } catch {}
+      }
+
+      const macdEntry = indicatorRefs.current.get("macd");
+      if (macdEntry?.[0] && macdEntry[1] && macdEntry[2]) {
+        try {
+          macdEntry[0].setData(histData(computed.macd.histogram));
+          macdEntry[1].setData(line(computed.macd.macdLine));
+          macdEntry[2].setData(line(computed.macd.signalLine));
+        } catch {}
+      }
+
+      const stochEntry = indicatorRefs.current.get("stochrsi");
+      if (stochEntry?.[0] && stochEntry[1]) {
+        try {
+          stochEntry[0].setData(line(computed.stochRsi.k));
+          stochEntry[1].setData(line(computed.stochRsi.d));
+        } catch {}
+      }
+
+      const cvdEntry = indicatorRefs.current.get("cvd");
+      if (cvdEntry?.[0]) {
+        try {
+          cvdEntry[0].setData(line(computed.cvd));
+        } catch {}
+      }
     }
 
-    const macdEntry = indicatorRefs.current.get("macd");
-    if (macdEntry?.[0] && macdEntry[1] && macdEntry[2]) {
-      try {
-        macdEntry[0].setData(histData(computed.macd.histogram));
-        macdEntry[1].setData(line(computed.macd.macdLine));
-        macdEntry[2].setData(line(computed.macd.signalLine));
-      } catch {}
-    }
+    if (derivativesData) {
+      const oiEntry = indicatorRefs.current.get("oi");
+      if (oiEntry?.[0]) {
+        try {
+          const points = dedupeAndSort(
+            derivativesData.openInterest.map((d) => ({
+              time: d.time as UTCTimestamp,
+              value: d.value,
+            }))
+          );
+          oiEntry[0].setData(points);
+        } catch {}
+      }
 
-    const stochEntry = indicatorRefs.current.get("stochrsi");
-    if (stochEntry?.[0] && stochEntry[1]) {
-      try {
-        stochEntry[0].setData(line(computed.stochRsi.k));
-        stochEntry[1].setData(line(computed.stochRsi.d));
-      } catch {}
+      const fundingEntry = indicatorRefs.current.get("funding");
+      if (fundingEntry?.[0]) {
+        try {
+          const points = dedupeAndSort(
+            derivativesData.fundingRates.map((d) => ({
+              time: d.time as UTCTimestamp,
+              value: d.rate,
+              color: d.rate >= 0 ? `${theme.green}cc` : `${theme.red}cc`,
+            }))
+          );
+          fundingEntry[0].setData(points);
+        } catch {}
+      }
     }
-  }, [computed, theme, line, histData]);
+  }, [computed, derivativesData, theme, line, histData]);
 
   // Clean up pane refs when chart instance is torn down
   useEffect(() => {

@@ -30,7 +30,8 @@ app/
     ├── comparison/route.ts # Multi-symbol ticker + 24h sparklines (powers Watchlist & Heatmap)
     ├── news/route.ts       # Multi-source RSS (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) + sentiment
     ├── calendar/route.ts   # Keyless high-impact macro economic calendar
-    └── correlation/route.ts# BTC/ETH 30d rolling correlation
+    ├── correlation/route.ts# BTC/ETH 30d rolling correlation
+    └── derivatives/route.ts# Binance Futures historical OI & Funding rate proxy
 components/
 ├── Panel.tsx               # Wrapper: drag grip + height/span. Use for side panels
 ├── CommandBar.tsx          # Top bar: logo, search, settings, clock
@@ -184,16 +185,19 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
   line stuck when moving between candles that share a snap price. While a draw
   tool is active the overlay swallows chart events, so `onPointerMove` re-drives
   the crosshair itself for continuous feedback.
-- **RSI/MACD live in native v5 sub-panes, not overlay price scales.** `PriceChart`
+- **RSI, MACD, Stoch RSI, OI, Funding & CVD live in native v5 sub-panes, not overlay price scales.** `PriceChart`
   creates them with `chart.addPane(true)` (preserve-empty, so a pane survives series
   teardown and keeps a user-resized height) and adds series via `pane.addSeries(...)`.
   RSI (14) and Stoch RSI (14,14,3,3) each pin their own right scale to 0–100 via the
   series `autoscaleInfoProvider`; MACD autoscales. RSI adds 70 / 50 / 30 and Stoch RSI
   adds 80 / 20 reference lines as thin dashed `createPriceLine` overlays, and each
   shades its neutral zone (between 70–30 / 80–20) with a translucent `PriceBandPrimitive`
-  (`lib/bands.ts`, a series primitive — lightweight-charts has no fill-between-prices). <br>The work is split across two effects: a *structural* one (deps
+  (`lib/bands.ts`, a series primitive — lightweight-charts has no fill-between-prices).
+  OI renders an `AreaSeries` formatted in `$B` / `$M`. Funding renders a `HistogramSeries`
+  with green/red bars and a `0.00%` dashed line. CVD renders a `LineSeries` continuous
+  volume delta with zero baseline. <br>The work is split across two effects: a *structural* one (deps
   `[activeIndicators, theme, chartEpoch]`) creates/destroys series + panes, and a
-  *data* one (deps `[computed, theme]`) pushes values. Rebuilding series inside the
+  *data* one (deps `[computed, derivativesData, theme]`) pushes values. Rebuilding series inside the
   data effect instead would reset a user-resized pane on every tick. Panes are split
   with `setStretchFactor` (main 4 : sub 1) and the divider is draggable for free
   (`layout.panes.enableResize`, themed with `separatorColor` / `separatorHoverColor`).

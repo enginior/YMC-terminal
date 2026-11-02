@@ -147,7 +147,7 @@ function PriceChart({
     ticker,
   });
 
-  // Technical indicators computations, structural sub-panes (RSI/MACD/Stoch), and live data updates
+  // Technical indicators computations, structural sub-panes (RSI/MACD/Stoch/OI/Funding/CVD), and live data updates
   const {
     activeIndicators,
     toggleIndicator,
@@ -156,6 +156,8 @@ function PriceChart({
     candles,
     theme,
     chartEpoch,
+    symbol,
+    timeframe,
   });
 
   // Real-time perpetual liquidation markers (size-scaled circle beacons at liquidation price)
