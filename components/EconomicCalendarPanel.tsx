@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface EconEvent {
   time: string;
@@ -92,30 +93,21 @@ function EconomicCalendarPanel() {
     }
   }, [impact, selectedCurrencies]);
 
-  // Polling data
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const res = await fetch("/api/calendar");
-        if (!res.ok) throw new Error(String(res.status));
-        const json = await res.json();
-        if (cancelled || !Array.isArray(json)) return;
-        setEvents(json);
-        setFailed(false);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-
-    load();
-    const id = setInterval(load, 300000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+  // Polling data (throttled when tab is backgrounded)
+  const loadCalendar = useCallback(async () => {
+    try {
+      const res = await fetch("/api/calendar");
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
+      setEvents(json);
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
   }, []);
+
+  useVisibilityPolling(loadCalendar, 300000);
 
   // Available currencies dynamically derived from loaded events
   const availableCurrencies = useMemo(() => {

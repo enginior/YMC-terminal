@@ -19,11 +19,76 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
-    version: "v0.1.6",
-    badge: "Latest Release · Phase 4 & 5",
-    tagline: "Reactive Tick Store, Render Isolation & Targeted Intelligence Filters",
+    version: "v0.2.0",
+    badge: "Major Milestone Release",
+    tagline: "TradingView-Style Charting Engine, Native Sub-Panes, Institutional Pair Switcher & Market Sessions",
     date: "Current",
     isLatest: true,
+    categories: [
+      {
+        name: "Professional TradingView-Style Drawing Suite (Specs 005–008)",
+        items: [
+          "Left drawing rail with flyout tool categories: Trendlines, Horizontal Lines, Rays, Channels, Fibonacci Retracements, Long/Short Position tools with R:R, and Measurement Ruler.",
+          "Interactive anchor handle dragging with live OHLC magnet snapping.",
+          "Floating drawing properties toolbar for stroke width (1-3px), line style (solid/dashed/dotted), 10 color swatches, lock toggle, and delete.",
+          "Full 50-step undo/redo history engine (Ctrl+Z / Ctrl+Y) with versioned localStorage schema migration.",
+        ],
+      },
+      {
+        name: "Native Sub-Panes: Derivatives & Order Flow (Spec 012)",
+        items: [
+          "Native lightweight-charts v5 multi-pane architecture with draggable pane dividers and preserved user-resized heights.",
+          "Open Interest (OI) sub-pane with formatted area series ($B / $M / $k).",
+          "Funding Rate sub-pane with 8-hour settlement histograms, color-coded bars, and 0.00% reference line.",
+          "Cumulative Volume Delta (CVD) continuous aggressive buy/sell market order flow oscillator.",
+        ],
+      },
+      {
+        name: "Real-Time Liquidation Markers on Chart (Spec 013)",
+        items: [
+          "Direct integration with Binance Futures liquidation stream (!forceOrder@arr).",
+          "Price-level circle beacons scaled by notional USD liquidation volume with customizable minimum filters ($10K, $50K, $100K, $500K, $1M).",
+        ],
+      },
+      {
+        name: "Institutional Symbol Search Modal & Quick Pair Switcher (Spec 009)",
+        items: [
+          "Bloomberg-style pair switcher invoked via global hotkey Ctrl+K or / or header badges.",
+          "Categorized asset filtering (All, Layer 1, DeFi, Meme, Commodities) with real-time streaming prices and 24h stats.",
+          "Recent symbol search history with keyboard arrow-key navigation and instant Enter selection.",
+        ],
+      },
+      {
+        name: "Configurable Technical Indicators (Spec 010)",
+        items: [
+          "Customizable mathematical parameters for SMA, EMA, Bollinger Bands, RSI, MACD, and Stoch RSI.",
+          "Inline configuration drawer in fx Indicators Modal with instant re-computation and localStorage persistence.",
+          "Dynamic overbought/oversold translucent zones and dashed threshold lines.",
+        ],
+      },
+      {
+        name: "Global Market Sessions & DST Tracker (Specs 015 & 016)",
+        items: [
+          "Forex Factory-style 24-hour global trading sessions timeline (Sydney, Tokyo, London, New York).",
+          "Automatic local viewer time conversion and daylight saving time (DST) offset calculations.",
+          "Wraparound day boundary segments and Tokyo Stock Exchange 1h lunch break visualization.",
+        ],
+      },
+      {
+        name: "Background-Tab Resource Throttling & Power Optimization (Spec 017)",
+        items: [
+          "Intelligent visibility polling (useVisibilityPolling): pauses periodic REST requests when browser tab is hidden to conserve CPU, battery, and server bandwidth.",
+          "Immediate on-visible hydration: automatically refreshes data the moment the user focuses back on the terminal tab.",
+          "Background alert continuity: routes socket tickers via timeout dispatch so price alerts and desktop notifications continue firing seamlessly.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.1.6",
+    badge: "Prior Release · Phase 4 & 5",
+    tagline: "Reactive Tick Store, Render Isolation & Targeted Intelligence Filters",
+    date: "Prior",
     categories: [
       {
         name: "Reactive External Tick Store (Render Isolation)",

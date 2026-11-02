@@ -22,6 +22,7 @@ import Panel from "@/components/Panel";
 import { useTheme, THEME_PRESETS } from "@/context/ThemeContext";
 import { useMarketFeed } from "@/hooks/useMultiExchangeData";
 import { useAlerts } from "@/hooks/useAlerts";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useRenderCount } from "@/lib/devRenderCount";
 import { toBinanceSymbol, resolvePrefix, UNIVERSE } from "@/lib/symbols";
 
@@ -193,26 +194,19 @@ export default function Home() {
     requestDesktopNotification,
   } = useAlerts();
 
-  // Real 24hr stats from Binance
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/ticker?symbol=${binanceSymbol}`);
-        if (!res.ok) throw new Error(String(res.status));
-        const json = await res.json();
-        if (!cancelled && json.lastPrice) setTicker(json);
-      } catch {
-        /* keep previous values rather than blanking the strip */
-      }
-    };
-    load();
-    const id = setInterval(load, 10000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+  // Real 24hr stats from Binance (throttled when tab is backgrounded)
+  const fetchTicker = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/ticker?symbol=${binanceSymbol}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      if (json.lastPrice) setTicker(json);
+    } catch {
+      /* keep previous values rather than blanking the strip */
+    }
   }, [binanceSymbol]);
+
+  useVisibilityPolling(fetchTicker, 10000);
 
   const handleDragStart = (index: number) => setDragIndex(index);
 

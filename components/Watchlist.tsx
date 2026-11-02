@@ -1,11 +1,12 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, useCallback } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { WatchlistItem } from "@/lib/types";
 import { isChartable, toBinanceSymbol } from "@/lib/symbols";
 import { AssetIcon } from "@/components/AssetIcon";
 import { useMarket } from "@/lib/marketStore";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface WatchlistProps {
   selected?: string;
@@ -21,40 +22,31 @@ function Watchlist({ selected, onSelect }: WatchlistProps) {
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadComparison = useCallback(async () => {
+    try {
+      const res = await fetch("/api/comparison");
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
 
-    const load = async () => {
-      try {
-        const res = await fetch("/api/comparison");
-        if (!res.ok) throw new Error(String(res.status));
-        const json = await res.json();
-        if (cancelled || !Array.isArray(json)) return;
-
-        setItems(
-          json.map((i: any) => ({
-            symbol: i.symbol,
-            price: i.price,
-            change: i.change,
-            changePercent: i.changePercent,
-            volume: i.volume,
-            rawVolume: i.rawVolume,
-            sparkline: Array.isArray(i.sparkline) ? i.sparkline : [],
-          }))
-        );
-        setFailed(false);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-
-    load();
-    const id = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+      setItems(
+        json.map((i: any) => ({
+          symbol: i.symbol,
+          price: i.price,
+          change: i.change,
+          changePercent: i.changePercent,
+          volume: i.volume,
+          rawVolume: i.rawVolume,
+          sparkline: Array.isArray(i.sparkline) ? i.sparkline : [],
+        }))
+      );
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
   }, []);
+
+  useVisibilityPolling(loadComparison, 15000);
 
   const sortedItems = [...items].sort((a, b) => {
     if (sortMode === "change") return b.changePercent - a.changePercent;

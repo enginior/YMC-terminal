@@ -15,6 +15,7 @@ import { Candle } from "@/lib/types";
 import { Theme } from "@/context/ThemeContext";
 import { sma, ema, rsi, macd, bollingerBands, stochRsi, cvd } from "@/lib/indicators";
 import { PriceBandPrimitive } from "@/lib/bands";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   IndicatorType,
   PaneIndicator,
@@ -127,35 +128,27 @@ export function useIndicatorPanes({
   // user-resized pane keeps its height until the indicator is switched off.
   const paneRefs = useRef<Map<PaneIndicator, IPaneApi<Time>>>(new Map());
 
-  // Fetch derivatives data (OI, Funding) when respective indicators are enabled
-  useEffect(() => {
-    const needsDerivatives = activeIndicators.has("oi") || activeIndicators.has("funding");
+  // Fetch derivatives data (OI, Funding) when respective indicators are enabled (throttled when backgrounded)
+  const needsDerivatives = activeIndicators.has("oi") || activeIndicators.has("funding");
+
+  const fetchDerivatives = useCallback(async () => {
     if (!needsDerivatives) return;
+    try {
+      const res = await fetch(
+        `/api/derivatives?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data) {
+        setDerivativesData({
+          openInterest: Array.isArray(data.openInterest) ? data.openInterest : [],
+          fundingRates: Array.isArray(data.fundingRates) ? data.fundingRates : [],
+        });
+      }
+    } catch {}
+  }, [needsDerivatives, symbol, timeframe]);
 
-    let cancelled = false;
-    async function fetchDerivatives() {
-      try {
-        const res = await fetch(
-          `/api/derivatives?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data) {
-          setDerivativesData({
-            openInterest: Array.isArray(data.openInterest) ? data.openInterest : [],
-            fundingRates: Array.isArray(data.fundingRates) ? data.fundingRates : [],
-          });
-        }
-      } catch {}
-    }
-
-    fetchDerivatives();
-    const timer = setInterval(fetchDerivatives, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [activeIndicators, symbol, timeframe]);
+  useVisibilityPolling(fetchDerivatives, 30_000, { enabled: needsDerivatives });
 
   const computed = useMemo(() => {
     if (candles.length === 0) return null;

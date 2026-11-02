@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useCallback } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { toBinanceSymbol } from "@/lib/symbols";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface SentimentData {
   symbol?: string;
@@ -66,30 +67,21 @@ function MarketSentimentPanel({ symbol = "BTC/USDT" }: MarketSentimentPanelProps
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchData = async () => {
-      try {
-        const res = await fetch(`/api/sentiment?symbol=${binanceSymbol}`);
-        if (!res.ok) throw new Error(String(res.status));
-        const json = await res.json();
-        if (!cancelled && json.fearGreedIndex !== undefined) {
-          setData(json);
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) setLoading(false);
+  const fetchSentiment = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sentiment?symbol=${binanceSymbol}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      if (json.fearGreedIndex !== undefined) {
+        setData(json);
+        setLoading(false);
       }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    } catch {
+      setLoading(false);
+    }
   }, [binanceSymbol]);
+
+  useVisibilityPolling(fetchSentiment, 30000);
 
   if (loading && !data) {
     return (

@@ -1,10 +1,11 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, useMemo } from "react";
+import { memo, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { AssetIcon } from "@/components/AssetIcon";
 import { toBinanceSymbol } from "@/lib/symbols";
 import { useMarket } from "@/lib/marketStore";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface SymbolData {
   symbol: string;
@@ -196,39 +197,30 @@ function MarketHeatmapPanel({ onSelect, selected }: MarketHeatmapPanelProps) {
   }, []);
 
   // Fetch real market comparison data
-  useEffect(() => {
-    let cancelled = false;
+  const loadHeatmap = useCallback(async () => {
+    try {
+      const res = await fetch("/api/comparison");
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      if (!Array.isArray(json)) return;
 
-    const load = async () => {
-      try {
-        const res = await fetch("/api/comparison");
-        if (!res.ok) throw new Error(String(res.status));
-        const json = await res.json();
-        if (cancelled || !Array.isArray(json)) return;
-
-        setData(
-          json.map((i: any) => ({
-            symbol: i.symbol,
-            price: i.price,
-            change: i.change,
-            changePercent: i.changePercent,
-            volume: i.volume,
-            rawVolume: i.rawVolume,
-          }))
-        );
-        setFailed(false);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-
-    load();
-    const id = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+      setData(
+        json.map((i: any) => ({
+          symbol: i.symbol,
+          price: i.price,
+          change: i.change,
+          changePercent: i.changePercent,
+          volume: i.volume,
+          rawVolume: i.rawVolume,
+        }))
+      );
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
   }, []);
+
+  useVisibilityPolling(loadHeatmap, 15000);
 
   // Compute squarified treemap tiles whenever dimensions or data changes
   const tiles = useMemo(() => {

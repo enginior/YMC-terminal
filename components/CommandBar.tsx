@@ -79,7 +79,7 @@ export default function CommandBar({
           className="text-[10px] font-mono px-1.5 py-0.5 rounded border hidden sm:inline-block leading-none"
           style={{ borderColor: `${theme.border}80`, color: theme.dim }}
         >
-          v0.1.6
+          v0.2.0
         </span>
       </div>
       <div className="flex items-center gap-2 flex-1 max-w-lg">

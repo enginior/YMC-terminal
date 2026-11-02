@@ -55,9 +55,11 @@ let state: MarketState = { ...INITIAL_MARKET_STATE };
 const listeners = new Set<() => void>();
 let dirty = false;
 let rafId: number | null = null;
+let timeoutId: number | null = null;
 
 function notify() {
   rafId = null;
+  timeoutId = null;
   if (!dirty) return;
   dirty = false;
   listeners.forEach((listener) => listener());
@@ -65,8 +67,19 @@ function notify() {
 
 function scheduleNotify() {
   dirty = true;
-  if (typeof window !== "undefined" && rafId === null) {
-    rafId = requestAnimationFrame(notify);
+  if (typeof window === "undefined") return;
+
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    // When the browser tab is hidden, requestAnimationFrame is suspended.
+    // Use a lightweight setTimeout so background price updates still notify
+    // alert listeners (for desktop notifications & audio chimes).
+    if (timeoutId === null) {
+      timeoutId = window.setTimeout(notify, 500) as unknown as number;
+    }
+  } else {
+    if (rafId === null) {
+      rafId = requestAnimationFrame(notify);
+    }
   }
 }
 

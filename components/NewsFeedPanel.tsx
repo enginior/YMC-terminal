@@ -1,9 +1,10 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useCallback } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { baseOf } from "@/lib/newsTags";
 import { useRenderCount } from "@/lib/devRenderCount";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface NewsItem {
   id: number;
@@ -27,22 +28,19 @@ function NewsFeedPanel({ symbol = "BTC/USDT" }: NewsFeedPanelProps) {
 
   const activeBase = baseOf(symbol);
 
-  useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        const res = await fetch("/api/news");
-        const json = await res.json();
-        if (Array.isArray(json)) {
-          setNews(json);
-        }
-      } catch {
-        // retry on next interval
+  const fetchNews = useCallback(async () => {
+    try {
+      const res = await fetch("/api/news");
+      const json = await res.json();
+      if (Array.isArray(json)) {
+        setNews(json);
       }
-    };
-    fetchNews();
-    const interval = setInterval(fetchNews, 60000);
-    return () => clearInterval(interval);
+    } catch {
+      // retry on next interval
+    }
   }, []);
+
+  useVisibilityPolling(fetchNews, 60000);
 
   const filtered = news
     .filter((n) => filter === "all" || n.sentiment === filter)
