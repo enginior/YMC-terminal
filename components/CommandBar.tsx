@@ -13,6 +13,7 @@ interface CommandBarProps {
   onOpenShortcuts?: () => void;
   onSelectSymbol?: (symbol: string) => void;
   selectedSymbol?: string;
+  onOpenSymbolSearch?: () => void;
 }
 
 export default function CommandBar({
@@ -21,6 +22,7 @@ export default function CommandBar({
   onOpenShortcuts,
   onSelectSymbol,
   selectedSymbol,
+  onOpenSymbolSearch,
 }: CommandBarProps) {
   const { theme } = useTheme();
   const [value, setValue] = useState("");
@@ -80,23 +82,46 @@ export default function CommandBar({
           v0.1.6
         </span>
       </div>
-      <form onSubmit={handleSubmit} className="flex-1 max-w-md">
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder="Type symbol + Enter (e.g. BTC, ETH)  |  Press / to focus"
-          className="w-full rounded px-2.5 py-1.5 text-sm focus:outline-none"
-          style={{
-            background: theme.bg,
-            border: `1px solid ${focused ? theme.blue : theme.border}`,
-            color: theme.text,
-          }}
-        />
-      </form>
+      <div className="flex items-center gap-2 flex-1 max-w-lg">
+        <form onSubmit={handleSubmit} className="flex-1">
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Type symbol + Enter (e.g. BTC, ETH)  |  Press / to focus"
+            className="w-full rounded px-2.5 py-1.5 text-sm focus:outline-none"
+            style={{
+              background: theme.bg,
+              border: `1px solid ${focused ? theme.blue : theme.border}`,
+              color: theme.text,
+            }}
+          />
+        </form>
+        {onOpenSymbolSearch && (
+          <button
+            type="button"
+            onClick={onOpenSymbolSearch}
+            className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded border text-xs hover:opacity-80 transition-opacity shrink-0"
+            style={{
+              borderColor: theme.border,
+              background: theme.bg,
+              color: theme.dim,
+            }}
+            title="Search all symbols & pair switcher (Ctrl+K or /)"
+          >
+            <span>🔍</span>
+            <span
+              className="text-[10px] font-mono font-bold px-1 py-0.5 rounded"
+              style={{ background: `${theme.yellow}20`, color: theme.yellow }}
+            >
+              Ctrl+K
+            </span>
+          </button>
+        )}
+      </div>
       {onSelectSymbol && (
         <div className="flex items-center gap-1">
           {CHART_LABELS.map((s) => (

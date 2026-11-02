@@ -40,6 +40,7 @@ interface ChartHeaderProps {
   onExportCsv: () => void;
   onToggleMaximize?: () => void;
   isMaximized?: boolean;
+  onOpenSymbolSearch?: () => void;
 }
 
 export function ChartHeader({
@@ -68,6 +69,7 @@ export function ChartHeader({
   onExportCsv,
   onToggleMaximize,
   isMaximized = false,
+  onOpenSymbolSearch,
 }: ChartHeaderProps) {
   const { theme } = useTheme();
   const [chartTypeMenuOpen, setChartTypeMenuOpen] = useState(false);
@@ -83,10 +85,21 @@ export function ChartHeader({
         className="px-2 py-1.5 border-b flex items-center gap-2 flex-wrap shrink-0 select-none"
         style={{ borderColor: theme.border }}
       >
-        {/* Symbol Indicator */}
-        <span className="text-[10px] uppercase font-bold tracking-wider" style={{ color: theme.dim }}>
-          {symbol}
-        </span>
+        {/* Symbol Indicator / Quick Switcher */}
+        <button
+          type="button"
+          onClick={onOpenSymbolSearch}
+          className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded hover:opacity-80 transition-all flex items-center gap-1 cursor-pointer"
+          style={{
+            background: `${theme.yellow}15`,
+            color: theme.yellow,
+            border: `1px solid ${theme.yellow}35`,
+          }}
+          title="Search symbols & switch pair (Ctrl+K or /)"
+        >
+          <span>{symbol}</span>
+          <span className="text-[8px] opacity-70">▼</span>
+        </button>
         <span style={{ color: theme.dim }}>|</span>
 
         {/* Favorite Timeframes Quick Strip */}

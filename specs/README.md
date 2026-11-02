@@ -45,6 +45,8 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | 012 | [Open Interest, Funding Rate & CVD sub-panes](./012-oi-funding-cvd-panes.md) | Done |
 | 015 | [Market Sessions & Trading Hours Panel](./015-market-sessions-panel.md) | Done (revised by 016) |
 | 016 | [Market Sessions: time-math fix, wrap bars & widget layout](./016-market-sessions-fix-and-widget-layout.md) | Done |
+| 009 | [Symbol Search Modal & Quick Pair Switcher](./009-symbol-search-modal.md) | Done |
+| 010 | [Configurable technical indicator parameters](./010-configurable-indicators.md) | In progress |
 
 **Recommended order:** 000 → 001 → 002 → 003 (the two small filters first, so the
 large `page.tsx` refactor in 003 lands last and doesn't conflict).

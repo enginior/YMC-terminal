@@ -10,11 +10,17 @@ import {
 } from "@/lib/symbols";
 
 describe("symbols mapping", () => {
-  it("defines 12 assets in UNIVERSE with matching CHART_LABELS", () => {
+  it("defines 12 assets in UNIVERSE with matching CHART_LABELS and metadata", () => {
     expect(UNIVERSE).toHaveLength(12);
     expect(CHART_LABELS).toHaveLength(12);
     expect(CHART_LABELS[0]).toBe("BTC/USDT");
     expect(CHART_LABELS[CHART_LABELS.length - 1]).toBe("OIL/USDT");
+
+    // Spec 009: Verify name and category metadata on all instruments
+    for (const item of UNIVERSE) {
+      expect(item.name).toBeTruthy();
+      expect(["Layer 1", "DeFi", "Meme", "Commodities"]).toContain(item.category);
+    }
   });
 
   describe("toBinanceSymbol", () => {

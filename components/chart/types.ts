@@ -185,4 +185,5 @@ export interface PriceChartProps {
   onToggleMaximize?: () => void;
   isMaximized?: boolean;
   ticker?: { high?: number; low?: number } | null;
+  onOpenSymbolSearch?: () => void;
 }

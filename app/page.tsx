@@ -17,6 +17,7 @@ import MarketSessionsPanel from "@/components/MarketSessionsPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
 import MarketSentimentPanel from "@/components/MarketSentimentPanel";
 import HotkeysModal from "@/components/HotkeysModal";
+import SymbolSearchModal from "@/components/SymbolSearchModal";
 import Panel from "@/components/Panel";
 import { useTheme, THEME_PRESETS } from "@/context/ThemeContext";
 import { useMarketFeed } from "@/hooks/useMultiExchangeData";
@@ -70,6 +71,7 @@ export default function Home() {
   const [timeframe, setTimeframe] = useState("1h");
   const [showSettings, setShowSettings] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [maximizedPanel, setMaximizedPanel] = useState<string | null>(null);
   const [ticker, setTicker] = useState<TickerStats | null>(null);
   const [panelOrder, setPanelOrder] = useState<PanelId[]>([...DEFAULT_ORDER]);
@@ -90,6 +92,19 @@ export default function Home() {
       if (e.key === "?" || e.key === "h" || e.key === "H") {
         e.preventDefault();
         setShowShortcuts((prev) => !prev);
+        return;
+      }
+
+      // Ctrl+K / Cmd+K or / opens institutional symbol search modal
+      if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowSymbolSearch((prev) => !prev);
+        return;
+      }
+
+      if (e.key === "/") {
+        e.preventDefault();
+        setShowSymbolSearch(true);
         return;
       }
 
@@ -135,6 +150,7 @@ export default function Home() {
       if (e.key === "Escape") {
         setShowShortcuts(false);
         setShowSettings(false);
+        setShowSymbolSearch(false);
         setMaximizedPanel(null);
       }
     };
@@ -283,6 +299,7 @@ export default function Home() {
             onToggleMaximize={() => setMaximizedPanel(null)}
             isMaximized={true}
             ticker={ticker}
+            onOpenSymbolSearch={() => setShowSymbolSearch(true)}
           />
         );
       case "orderbook":
@@ -393,6 +410,7 @@ export default function Home() {
           selectedSymbol={selectedSymbol}
           onOpenSettings={() => setShowSettings(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
+          onOpenSymbolSearch={() => setShowSymbolSearch(true)}
         />
 
         <div className="flex flex-col gap-px p-px" style={{ background: theme.border }}>
@@ -409,6 +427,7 @@ export default function Home() {
               timeframe={timeframe}
               onTimeframeChange={setTimeframe}
               ticker={ticker}
+              onOpenSymbolSearch={() => setShowSymbolSearch(true)}
             />
           </div>
 
@@ -464,6 +483,14 @@ export default function Home() {
 
         {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
         {showShortcuts && <HotkeysModal onClose={() => setShowShortcuts(false)} />}
+        {showSymbolSearch && (
+          <SymbolSearchModal
+            isOpen={showSymbolSearch}
+            onClose={() => setShowSymbolSearch(false)}
+            onSelectSymbol={setSelectedSymbol}
+            selectedSymbol={selectedSymbol}
+          />
+        )}
         {showNotification && <AlertNotification alert={showNotification} onDismiss={dismissNotification} />}
       </div>
     );
@@ -477,6 +504,7 @@ export default function Home() {
         selectedSymbol={selectedSymbol}
         onOpenSettings={() => setShowSettings(true)}
         onOpenShortcuts={() => setShowShortcuts(true)}
+        onOpenSymbolSearch={() => setShowSymbolSearch(true)}
       />
 
       {maximizedPanel ? (
@@ -541,6 +569,7 @@ export default function Home() {
               onToggleMaximize={() => setMaximizedPanel("chart")}
               isMaximized={false}
               ticker={ticker}
+              onOpenSymbolSearch={() => setShowSymbolSearch(true)}
             />
           </div>
 
@@ -564,6 +593,14 @@ export default function Home() {
         />
       )}
       {showShortcuts && <HotkeysModal onClose={() => setShowShortcuts(false)} />}
+      {showSymbolSearch && (
+        <SymbolSearchModal
+          isOpen={showSymbolSearch}
+          onClose={() => setShowSymbolSearch(false)}
+          onSelectSymbol={setSelectedSymbol}
+          selectedSymbol={selectedSymbol}
+        />
+      )}
       {showNotification && <AlertNotification alert={showNotification} onDismiss={dismissNotification} />}
     </div>
   );

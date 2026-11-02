@@ -10,23 +10,27 @@ export interface SymbolDef {
   label: string;
   /** The real instrument on the data provider. */
   symbol: string;
+  /** Full asset name e.g. "Bitcoin" */
+  name: string;
+  /** Asset category e.g. "Layer 1", "Commodities" */
+  category: "Layer 1" | "DeFi" | "Meme" | "Commodities";
 }
 
 /** Assets selectable in the watchlist and chartable. */
 export const UNIVERSE: SymbolDef[] = [
-  { label: "BTC/USDT", symbol: "BTCUSDT" },
-  { label: "ETH/USDT", symbol: "ETHUSDT" },
-  { label: "SOL/USDT", symbol: "SOLUSDT" },
-  { label: "XRP/USDT", symbol: "XRPUSDT" },
-  { label: "BNB/USDT", symbol: "BNBUSDT" },
-  { label: "DOGE/USDT", symbol: "DOGEUSDT" },
-  { label: "SUI/USDT", symbol: "SUIUSDT" },
-  { label: "AVAX/USDT", symbol: "AVAXUSDT" },
-  { label: "LINK/USDT", symbol: "LINKUSDT" },
+  { label: "BTC/USDT", symbol: "BTCUSDT", name: "Bitcoin", category: "Layer 1" },
+  { label: "ETH/USDT", symbol: "ETHUSDT", name: "Ethereum", category: "Layer 1" },
+  { label: "SOL/USDT", symbol: "SOLUSDT", name: "Solana", category: "Layer 1" },
+  { label: "XRP/USDT", symbol: "XRPUSDT", name: "Ripple", category: "Layer 1" },
+  { label: "BNB/USDT", symbol: "BNBUSDT", name: "BNB Chain", category: "Layer 1" },
+  { label: "DOGE/USDT", symbol: "DOGEUSDT", name: "Dogecoin", category: "Meme" },
+  { label: "SUI/USDT", symbol: "SUIUSDT", name: "Sui Network", category: "Layer 1" },
+  { label: "AVAX/USDT", symbol: "AVAXUSDT", name: "Avalanche", category: "Layer 1" },
+  { label: "LINK/USDT", symbol: "LINKUSDT", name: "Chainlink", category: "DeFi" },
   // Commodities & Precious Metals
-  { label: "XAU/USDT", symbol: "XAUUSDT" },
-  { label: "XAG/USDT", symbol: "XAGUSDT" },
-  { label: "OIL/USDT", symbol: "CLUSDT" },
+  { label: "XAU/USDT", symbol: "XAUUSDT", name: "Gold (Pax Gold)", category: "Commodities" },
+  { label: "XAG/USDT", symbol: "XAGUSDT", name: "Silver", category: "Commodities" },
+  { label: "OIL/USDT", symbol: "CLUSDT", name: "Crude Oil (WTI)", category: "Commodities" },
 ];
 
 const BY_LABEL = new Map(UNIVERSE.map((d) => [d.label, d.symbol]));

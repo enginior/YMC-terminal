@@ -29,6 +29,7 @@ function PriceChart({
   onToggleMaximize,
   isMaximized = false,
   ticker,
+  onOpenSymbolSearch,
 }: PriceChartProps) {
   const { theme } = useTheme();
   const storeCandles = useMarket((s) => s.candles);
@@ -286,6 +287,7 @@ function PriceChart({
         onExportCsv={exportCsv}
         onToggleMaximize={onToggleMaximize}
         isMaximized={isMaximized}
+        onOpenSymbolSearch={onOpenSymbolSearch}
       />
 
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
