@@ -5,7 +5,7 @@ perpetual crypto derivative pairs. It streams live prices from multiple exchange
 renders a TradingView-grade candlestick chart with technical indicators and
 drawing tools, and surrounds it with the telemetry a trader actively glances at:
 order book, trade tape, 24h stats, exchange comparison, sentiment, economic calendar,
-correlation, multi-source news, and price alerts.
+market sessions, multi-source news, and price alerts.
 
 Live in production on Vercel: [github.com/enginior/YMC-terminal](https://github.com/enginior/YMC-terminal)
 
@@ -54,8 +54,7 @@ React/Next.js stack. No API keys, no paid feeds — every data source is free an
 - **Exchange comparison** — per-venue price, aggregated mid, and spread across Binance, Coinbase, OKX, and Bybit.
 - **Market sentiment** — Fear & Greed gauge, funding rates, 8h funding settlement countdown, annualized APR, open interest, and Global Long/Short account ratio.
 - **Economic Calendar** — macroeconomic events with high/medium impact toggle, dynamic currency filtering, previous/forecast/actual prints, and importance dots.
-- **Correlation** — BTC/ETH 30-day rolling correlation (BTC/SPX, DXY and Gold are
-  placeholders pending a TradFi feed).
+- **Market Sessions** — Forex Factory-style 24-hour visual horizontal timeline showing global trading hours (Sydney, Tokyo, London, New York) with live NOW beacon line, automatic IANA timezone conversion, DST adjustment, and Equities (Cash Bell) vs Forex modes.
 - **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter, asset tagging, and a 1-click active-symbol filter.
 
 ### Alerts & theming
@@ -157,7 +156,6 @@ State is kept in `localStorage` under these keys:
 
 ## Known limitations
 
-- BTC/SPX, DXY and Gold correlation are placeholders (need a premium TradFi feed).
 - static-klines refreshes once a day at 00:00 UTC; the tail is backfilled from
   Binance REST.
 - `1m`/`5m` have no static archive, so history is Binance-only (~2–14 days).

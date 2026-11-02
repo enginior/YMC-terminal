@@ -13,7 +13,7 @@ import AlertNotification from "@/components/AlertNotification";
 import ExchangePanel from "@/components/ExchangePanel";
 import MarketHeatmapPanel from "@/components/MarketHeatmapPanel";
 import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
-import CorrelationPanel from "@/components/CorrelationPanel";
+import MarketSessionsPanel from "@/components/MarketSessionsPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
 import MarketSentimentPanel from "@/components/MarketSentimentPanel";
 import HotkeysModal from "@/components/HotkeysModal";
@@ -32,7 +32,7 @@ const DEFAULT_ORDER = [
   "alerts",
   "sentiment",
   "exchange",
-  "correlation",
+  "sessions",
   "news",
 ] as const;
 
@@ -52,8 +52,10 @@ function loadOrder(): PanelId[] {
     if (!raw) return [...DEFAULT_ORDER];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [...DEFAULT_ORDER];
+    // Map legacy "correlation" to "sessions"
+    const migrated = parsed.map((id) => (id === "correlation" ? "sessions" : id));
     // Drop unknown ids and append missing ones so the grid can never tear
-    const known = parsed.filter((id): id is PanelId => DEFAULT_ORDER.includes(id));
+    const known = migrated.filter((id): id is PanelId => DEFAULT_ORDER.includes(id));
     const missing = DEFAULT_ORDER.filter((id) => !known.includes(id));
     return [...known, ...missing];
   } catch {
@@ -253,8 +255,8 @@ export default function Home() {
       case "exchange":
         body = <ExchangePanel />;
         break;
-      case "correlation":
-        body = <CorrelationPanel />;
+      case "sessions":
+        body = <MarketSessionsPanel />;
         break;
       case "news":
         body = <NewsFeedPanel symbol={selectedSymbol} />;
@@ -304,8 +306,8 @@ export default function Home() {
         return <MarketSentimentPanel symbol={selectedSymbol} />;
       case "exchange":
         return <ExchangePanel />;
-      case "correlation":
-        return <CorrelationPanel />;
+      case "sessions":
+        return <MarketSessionsPanel />;
       case "news":
         return <NewsFeedPanel symbol={selectedSymbol} />;
       case "calendar":
@@ -439,7 +441,7 @@ export default function Home() {
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
-            <CorrelationPanel />
+            <MarketSessionsPanel />
           </div>
 
           <div style={{ background: theme.panel, height: 360 }}>

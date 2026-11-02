@@ -191,7 +191,8 @@ const FEATURES = [
   "Price alerts with sound and toast notifications",
   "Drag-and-drop terminal panels with a persisted layout",
   "Multi-source news feed with bull/bear sentiment filter",
-  "BTC/ETH rolling correlation and macroeconomic calendar",
+  "Global market trading sessions (Sydney, Tokyo, London, New York) with automatic DST tracking",
+  "Macroeconomic calendar with impact and currency filters",
   "Customizable themes with an in-app color editor",
 ];
 

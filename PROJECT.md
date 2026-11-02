@@ -32,7 +32,6 @@ ymc-terminal/
 │       ├── comparison/route.ts # Multi-symbol ticker + 24h sparklines (powers Watchlist & Heatmap)
 │       ├── news/route.ts       # Multi-source RSS with keyword sentiment
 │       ├── calendar/route.ts   # Keyless high-impact macro economic calendar
-│       ├── correlation/route.ts# BTC/ETH 30d rolling correlation
 │       └── derivatives/route.ts# Binance Futures historical OI & Funding rate proxy
 ├── components/
 │   ├── Panel.tsx               # Wrapper: drag grip + height/span
@@ -60,7 +59,7 @@ ymc-terminal/
 │   ├── MarketHeatmapPanel.tsx  # 24h volume-weighted crypto treemap status widget
 │   ├── EconomicCalendarPanel.tsx # High-impact macro calendar events
 │   ├── MarketSentimentPanel.tsx# F&G gauge, funding rates, countdown, OI, L/S ratio
-│   ├── CorrelationPanel.tsx    # BTC/ETH correlation bars
+│   ├── MarketSessionsPanel.tsx # Forex Factory-style 24h market sessions & DST tracker
 │   ├── NewsFeedPanel.tsx       # News with bull/bear filter
 │   ├── SettingsPanel.tsx       # Theme presets + color editor + reset layout
 │   ├── HotkeysModal.tsx        # Bloomberg shortcut cheat sheet modal (?)
@@ -81,6 +80,7 @@ ymc-terminal/
 │   ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 │   ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 │   ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
+│   ├── sessions.ts             # Global market sessions schedule, IANA timezone conversion & DST engine
 │   └── links.ts                # Canonical repository links
 ├── __tests__/                  # Unit test suite with Vitest (Spec 014)
 │   ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
@@ -89,7 +89,9 @@ ymc-terminal/
 │   ├── newsTags.test.ts        # News categorization and asset tagging
 │   ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
 │   ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
-│   └── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
+│   ├── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
+│   ├── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
+│   └── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
 └── package.json
 ```
 
@@ -127,7 +129,7 @@ ymc-terminal/
 - Watchlist with inline 24h trend sparklines, notional quote volume, and 1-click sorting (Gainers, Losers, Volume, A-Z)
 - Crypto Market Heatmap: 24h volume-weighted squarified treemap widget with 1-click chart selection
 - Market sentiment panel (F&G gauge, funding rates, countdown, OI, Global Long/Short account ratio)
-- Correlation panel (BTC/ETH real; BTC/SPX/DXY/Gold placeholders)
+- Market Sessions & Trading Hours panel: Forex Factory-style 24-hour visual horizontal timeline with live NOW beacon line, automatic IANA timezone conversion, DST adjustment, and Equities (Cash Bell) vs Forex modes
 - News feed with bull/bear sentiment filter
 - Drag-and-drop panel reordering (persisted)
 - Command bar with keyboard shortcuts (`/` to focus, `Esc` to clear, `?` for cheat sheet modal)
@@ -177,7 +179,7 @@ useAlerts    → price monitoring → AlertNotification (toast)
 ### Phase 3: Analytics & Alerts ✅
 - [x] Price alerts (visual + sound notifications)
 - [x] Market sentiment indicators (F&G gauge, funding rates, OI)
-- [x] Correlation with other assets (BTC/ETH real; BTC/SPX/DXY/Gold placeholder)
+- [x] Global Market Sessions & Trading Hours Panel (replaced correlation)
 
 ### Phase 4: Advanced Features ✅
 - [x] Multi-symbol comparison view

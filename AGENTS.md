@@ -30,7 +30,6 @@ app/
     ├── comparison/route.ts # Multi-symbol ticker + 24h sparklines (powers Watchlist & Heatmap)
     ├── news/route.ts       # Multi-source RSS (CoinDesk, CT, Block, Decrypt, BTC Mag, CNBC) + sentiment
     ├── calendar/route.ts   # Keyless high-impact macro economic calendar
-    ├── correlation/route.ts# BTC/ETH 30d rolling correlation
     └── derivatives/route.ts# Binance Futures historical OI & Funding rate proxy
 components/
 ├── Panel.tsx               # Wrapper: drag grip + height/span. Use for side panels
@@ -58,7 +57,7 @@ components/
 ├── MarketHeatmapPanel.tsx  # 24h volume-weighted crypto treemap status widget
 ├── EconomicCalendarPanel.tsx # High-impact macro calendar events
 ├── MarketSentimentPanel.tsx# F&G gauge, funding rates, countdown, OI, L/S ratio
-├── CorrelationPanel.tsx    # BTC/ETH correlation bars
+├── MarketSessionsPanel.tsx # Forex Factory-style 24h market sessions & DST tracker
 ├── NewsFeedPanel.tsx       # News with bull/bear filter
 ├── SettingsPanel.tsx       # Theme presets + color editor + reset layout
 ├── HotkeysModal.tsx        # Bloomberg shortcut cheat sheet modal (?)
@@ -79,6 +78,7 @@ lib/
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
+├── sessions.ts             # Global market sessions schedule, IANA timezone conversion & DST engine
 └── links.ts                # Canonical repository links
 __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
@@ -88,7 +88,8 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
 ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
 ├── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
-└── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
+├── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
+└── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
 ```
 
 ## Notable Constraints
@@ -218,7 +219,6 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
 - localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`, `btc-terminal:liq-markers` (plus opt-in read-only `btc-terminal:debug-renders`).
 
 ## Known Limitations
-- BTC/SPX/DXY/Gold correlation are placeholders (needs a premium TradFi feed)
 - static-klines refreshes daily at 00:00 UTC; the tail is backfilled from Binance REST
 - 1m/5m have no static archive, so history is Binance-only (~2–14 days)
 - RSI pane is pinned to a 0–100 scale; MACD autoscales
