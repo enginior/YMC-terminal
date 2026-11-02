@@ -80,5 +80,101 @@ describe("marketStore", () => {
 
       unsubscribe();
     });
+
+    describe("updateLiveCandle", () => {
+      it("initializes candle array if empty", () => {
+        const candle = {
+          time: 1700000000,
+          open: 65000,
+          high: 65500,
+          low: 64900,
+          close: 65200,
+          volume: 10.5,
+        };
+        marketStore.updateLiveCandle(candle);
+        expect(marketStore.getState().candles).toEqual([candle]);
+      });
+
+      it("updates the active candle in place when time matches", () => {
+        const c1 = {
+          time: 1700000000,
+          open: 65000,
+          high: 65500,
+          low: 64900,
+          close: 65200,
+          volume: 10.5,
+        };
+        const c2 = {
+          time: 1700000060,
+          open: 65200,
+          high: 65300,
+          low: 65100,
+          close: 65250,
+          volume: 2.1,
+        };
+        marketStore.setState({ candles: [c1, c2] });
+
+        // Tick updates current candle's close and high
+        const c2Update = {
+          time: 1700000060,
+          open: 65200,
+          high: 65400,
+          low: 65100,
+          close: 65380,
+          volume: 3.5,
+        };
+        marketStore.updateLiveCandle(c2Update);
+
+        const candles = marketStore.getState().candles;
+        expect(candles).toHaveLength(2);
+        expect(candles[0]).toEqual(c1);
+        expect(candles[1]).toEqual(c2Update);
+      });
+
+      it("appends new candle when timestamp is newer", () => {
+        const c1 = {
+          time: 1700000000,
+          open: 65000,
+          high: 65500,
+          low: 64900,
+          close: 65200,
+          volume: 10.5,
+        };
+        marketStore.setState({ candles: [c1] });
+
+        const c2 = {
+          time: 1700000060,
+          open: 65200,
+          high: 65300,
+          low: 65100,
+          close: 65250,
+          volume: 1.0,
+        };
+        marketStore.updateLiveCandle(c2);
+
+        const candles = marketStore.getState().candles;
+        expect(candles).toHaveLength(2);
+        expect(candles[1]).toEqual(c2);
+      });
+
+      it("does not update state if identical candle is pushed", () => {
+        const c1 = {
+          time: 1700000000,
+          open: 65000,
+          high: 65500,
+          low: 64900,
+          close: 65200,
+          volume: 10.5,
+        };
+        marketStore.setState({ candles: [c1] });
+        const beforeRef = marketStore.getState().candles;
+
+        // Push identical values
+        marketStore.updateLiveCandle({ ...c1 });
+        const afterRef = marketStore.getState().candles;
+
+        expect(beforeRef).toBe(afterRef); // Same array reference
+      });
+    });
   });
 });

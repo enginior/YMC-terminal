@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { Trade, OrderBookEntry } from "@/lib/types";
+import { Trade, OrderBookEntry, Candle } from "@/lib/types";
 import { isFuturesSymbol, UNIVERSE, toLabel } from "@/lib/symbols";
 import { marketStore, ExchangeData } from "@/lib/marketStore";
 
@@ -369,6 +369,26 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
         return;
       }
 
+      // Binance real-time kline stream (@kline_<interval>)
+      if (msg?.e === "kline" && msg?.k) {
+        const k = msg.k;
+        const s = symbol.toLowerCase().replace(/[\/\s]/g, "");
+        const expectedSymbol = (s.endsWith("usdt") ? s : `${s}usdt`).toUpperCase();
+        if (k.s?.toUpperCase() === expectedSymbol && k.i === interval) {
+          const candleTime = Math.floor(k.t / 1000);
+          const candle: Candle = {
+            time: candleTime,
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v),
+          };
+          marketStore.updateLiveCandle(candle);
+        }
+        return;
+      }
+
       if (!exchange.isTrade(msg)) return;
       const trade = exchange.parseTrade(msg);
       if (!trade || !Number.isFinite(trade.price) || trade.price <= 0) return;
@@ -446,8 +466,7 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
     };
   }, [symbol, interval]);
 
-  // Keep the live candle fresh. Goes through our own route to avoid CORS
-  // and to pick up the same interval mapping the chart uses.
+  // Fallback REST poll to keep active candle resilient during network drops
   useEffect(() => {
     const tick = async () => {
       try {
@@ -455,23 +474,11 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return;
         const latest = data[data.length - 1];
-        const prev = marketStore.getState().candles;
-        let nextCandles: typeof prev;
-        if (prev.length === 0) {
-          nextCandles = [latest];
-        } else {
-          const last = prev[prev.length - 1];
-          if (last.time === latest.time) {
-            nextCandles = [...prev.slice(0, -1), latest];
-          } else {
-            nextCandles = [...prev, latest];
-          }
-        }
-        marketStore.setState({ candles: nextCandles });
+        marketStore.updateLiveCandle(latest);
       } catch {}
     };
 
-    const id = setInterval(tick, 5000);
+    const id = setInterval(tick, 10000);
     return () => clearInterval(id);
   }, [symbol, interval]);
 

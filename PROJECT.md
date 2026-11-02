@@ -93,7 +93,7 @@ ymc-terminal/
 ## Current Features
 - Multi-panel terminal layout (watchlist, chart, order book, trade tape, stats, heatmap, calendar, alerts)
 - Multi-exchange WebSocket data (Binance, Coinbase, OKX, Bybit) with price aggregation
-- Historical candle data via static-klines + Binance REST, live kline updates via WebSocket
+- Historical candle data via static-klines + Binance REST, real-time active candle updates via Binance WebSocket (@kline_<tf>), and resilient 10s REST fallback
 - Candlestick chart with 8 working timeframes (1m, 5m, 15m, 30m, 1h, 2h, 4h, 1d), default 1h
 - Chart symbol switching across 12 pairs (BTC, ETH, SOL, XRP, BNB, DOGE, SUI, AVAX, LINK, XAU, XAG, OIL), each refitted on change
 - Chart visuals dropdown: instant toggle between standard Candlesticks, smoothed Heikin Ashi trend bars, and continuous Line chart (persisted)

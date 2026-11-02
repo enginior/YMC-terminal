@@ -117,6 +117,36 @@ export const marketStore = {
     };
     scheduleNotify();
   },
+
+  updateLiveCandle(candle: Candle): void {
+    if (!candle || !Number.isFinite(candle.time) || !Number.isFinite(candle.close)) return;
+    const prev = state.candles;
+    if (prev.length === 0) {
+      state = { ...state, candles: [candle] };
+      scheduleNotify();
+      return;
+    }
+
+    const last = prev[prev.length - 1];
+    if (last.time === candle.time) {
+      if (
+        last.open === candle.open &&
+        last.high === candle.high &&
+        last.low === candle.low &&
+        last.close === candle.close &&
+        last.volume === candle.volume
+      ) {
+        return;
+      }
+      const nextCandles = [...prev.slice(0, -1), candle];
+      state = { ...state, candles: nextCandles };
+      scheduleNotify();
+    } else if (candle.time > last.time) {
+      const nextCandles = [...prev, candle];
+      state = { ...state, candles: nextCandles };
+      scheduleNotify();
+    }
+  },
 };
 
 export function shallowEqual<T>(a: T, b: T): boolean {
