@@ -2,7 +2,13 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
-import { IndicatorType, INDICATOR_METAS, IndicatorMeta } from "./types";
+import {
+  IndicatorType,
+  INDICATOR_METAS,
+  IndicatorMeta,
+  IndicatorSettings,
+  DEFAULT_INDICATOR_SETTINGS,
+} from "./types";
 
 interface IndicatorsModalProps {
   isOpen: boolean;
@@ -10,7 +16,22 @@ interface IndicatorsModalProps {
   activeIndicators: Set<IndicatorType>;
   onToggleIndicator: (id: IndicatorType) => void;
   onClearAll?: () => void;
+  settings?: IndicatorSettings;
+  onUpdateSettings?: <K extends keyof IndicatorSettings>(
+    key: K,
+    updates: Partial<IndicatorSettings[K]>
+  ) => void;
+  onResetSettings?: (key?: keyof IndicatorSettings) => void;
 }
+
+const CONFIGURABLE_INDICATORS = new Set<IndicatorType>([
+  "sma",
+  "ema",
+  "bollinger",
+  "rsi",
+  "macd",
+  "stochrsi",
+]);
 
 export function IndicatorsModal({
   isOpen,
@@ -18,9 +39,13 @@ export function IndicatorsModal({
   activeIndicators,
   onToggleIndicator,
   onClearAll,
+  settings = DEFAULT_INDICATOR_SETTINGS,
+  onUpdateSettings,
+  onResetSettings,
 }: IndicatorsModalProps) {
   const { theme } = useTheme();
   const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<IndicatorType | null>(null);
 
   // Close on Escape key
   useEffect(() => {
@@ -166,6 +191,14 @@ export function IndicatorsModal({
                         meta={meta}
                         isActive={activeIndicators.has(meta.id)}
                         onToggle={() => onToggleIndicator(meta.id)}
+                        isConfigurable={CONFIGURABLE_INDICATORS.has(meta.id)}
+                        isExpanded={expandedId === meta.id}
+                        onToggleExpand={() =>
+                          setExpandedId((curr) => (curr === meta.id ? null : meta.id))
+                        }
+                        settings={settings}
+                        onUpdateSettings={onUpdateSettings}
+                        onResetSettings={onResetSettings}
                         theme={theme}
                       />
                     ))}
@@ -191,6 +224,14 @@ export function IndicatorsModal({
                         meta={meta}
                         isActive={activeIndicators.has(meta.id)}
                         onToggle={() => onToggleIndicator(meta.id)}
+                        isConfigurable={CONFIGURABLE_INDICATORS.has(meta.id)}
+                        isExpanded={expandedId === meta.id}
+                        onToggleExpand={() =>
+                          setExpandedId((curr) => (curr === meta.id ? null : meta.id))
+                        }
+                        settings={settings}
+                        onUpdateSettings={onUpdateSettings}
+                        onResetSettings={onResetSettings}
                         theme={theme}
                       />
                     ))}
@@ -216,6 +257,14 @@ export function IndicatorsModal({
                         meta={meta}
                         isActive={activeIndicators.has(meta.id)}
                         onToggle={() => onToggleIndicator(meta.id)}
+                        isConfigurable={CONFIGURABLE_INDICATORS.has(meta.id)}
+                        isExpanded={expandedId === meta.id}
+                        onToggleExpand={() =>
+                          setExpandedId((curr) => (curr === meta.id ? null : meta.id))
+                        }
+                        settings={settings}
+                        onUpdateSettings={onUpdateSettings}
+                        onResetSettings={onResetSettings}
                         theme={theme}
                       />
                     ))}
@@ -247,6 +296,16 @@ export function IndicatorsModal({
                 Clear All
               </button>
             )}
+            {onResetSettings && (
+              <button
+                onClick={() => onResetSettings()}
+                className="text-[11px] px-2 py-1 rounded hover:opacity-80 transition-opacity font-mono"
+                style={{ color: theme.dim, border: `1px solid ${theme.border}` }}
+                title="Reset all indicator parameters to defaults"
+              >
+                Reset All Params
+              </button>
+            )}
           </div>
 
           <button
@@ -262,63 +321,404 @@ export function IndicatorsModal({
   );
 }
 
+function getDynamicLabels(meta: IndicatorMeta, settings: IndicatorSettings) {
+  switch (meta.id) {
+    case "sma":
+      return {
+        name: `SMA ${settings.sma.fast} / ${settings.sma.slow}`,
+        formula: `${settings.sma.fast}-period (Blue) & ${settings.sma.slow}-period (Yellow) moving averages`,
+      };
+    case "ema":
+      return {
+        name: `EMA ${settings.ema.fast} / ${settings.ema.slow}`,
+        formula: `${settings.ema.fast}-period (Green) & ${settings.ema.slow}-period (Red) moving averages`,
+      };
+    case "bollinger":
+      return {
+        name: `Bollinger (${settings.bollinger.period}, ${settings.bollinger.stdDev})`,
+        formula: `${settings.bollinger.period}-period baseline with ±${settings.bollinger.stdDev} standard deviation envelope`,
+      };
+    case "rsi":
+      return {
+        name: `RSI (${settings.rsi.period})`,
+        formula: `${settings.rsi.period}-period momentum oscillator with ${settings.rsi.overbought}/${settings.rsi.oversold} bands`,
+      };
+    case "macd":
+      return {
+        name: `MACD (${settings.macd.fast}, ${settings.macd.slow}, ${settings.macd.signal})`,
+        formula: `${settings.macd.fast}/${settings.macd.slow} exponential spread with ${settings.macd.signal}-period signal line`,
+      };
+    case "stochrsi":
+      return {
+        name: `Stoch RSI (${settings.stochrsi.lengthRSI}, ${settings.stochrsi.lengthStoch}, ${settings.stochrsi.smoothK}, ${settings.stochrsi.smoothD})`,
+        formula: `RSI ${settings.stochrsi.lengthRSI} stochastic ${settings.stochrsi.lengthStoch} with %K (${settings.stochrsi.smoothK}) & %D (${settings.stochrsi.smoothD}) smoothing (${settings.stochrsi.overbought}/${settings.stochrsi.oversold})`,
+      };
+    default:
+      return {
+        name: meta.name,
+        formula: meta.formula,
+      };
+  }
+}
+
+interface IndicatorRowProps {
+  meta: IndicatorMeta;
+  isActive: boolean;
+  onToggle: () => void;
+  isConfigurable: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  settings: IndicatorSettings;
+  onUpdateSettings?: <K extends keyof IndicatorSettings>(
+    key: K,
+    updates: Partial<IndicatorSettings[K]>
+  ) => void;
+  onResetSettings?: (key?: keyof IndicatorSettings) => void;
+  theme: any;
+}
+
 function IndicatorRow({
   meta,
   isActive,
   onToggle,
+  isConfigurable,
+  isExpanded,
+  onToggleExpand,
+  settings,
+  onUpdateSettings,
+  onResetSettings,
   theme,
-}: {
-  meta: IndicatorMeta;
-  isActive: boolean;
-  onToggle: () => void;
-  theme: any;
-}) {
+}: IndicatorRowProps) {
+  const dynamic = getDynamicLabels(meta, settings);
+
   return (
     <div
-      onClick={onToggle}
-      className="p-2.5 rounded border flex items-center justify-between cursor-pointer transition-colors group"
+      className="rounded border overflow-hidden transition-colors"
       style={{
-        borderColor: isActive ? theme.green : theme.border,
-        background: isActive ? `${theme.green}10` : "transparent",
+        borderColor: isActive ? theme.green : isExpanded ? theme.yellow : theme.border,
+        background: isActive ? `${theme.green}08` : "transparent",
       }}
     >
-      <div className="flex-1 pr-3">
-        <div className="flex items-center gap-2">
-          <span
-            className="font-medium text-xs tracking-tight"
-            style={{ color: isActive ? theme.text : theme.dim }}
-          >
-            {meta.name}
-          </span>
-          <span
-            className="text-[9px] px-1 py-0.2 rounded font-mono"
+      <div
+        onClick={onToggle}
+        className="p-2.5 flex items-center justify-between cursor-pointer transition-colors"
+      >
+        <div className="flex-1 pr-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="font-medium text-xs tracking-tight"
+              style={{ color: isActive ? theme.text : theme.dim }}
+            >
+              {dynamic.name}
+            </span>
+            <span
+              className="text-[9px] px-1 py-0.2 rounded font-mono"
+              style={{
+                background: `${theme.dim}18`,
+                color: theme.dim,
+              }}
+            >
+              {meta.category}
+            </span>
+          </div>
+          <div className="text-[10px] mt-0.5 line-clamp-1" style={{ color: theme.dim }}>
+            {meta.shortDesc}
+          </div>
+          <div className="text-[9px] mt-0.5 font-mono opacity-60">
+            {dynamic.formula}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isConfigurable && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand();
+              }}
+              className="p-1 rounded hover:opacity-80 transition-colors text-xs flex items-center justify-center w-6 h-6"
+              style={{
+                color: isExpanded ? theme.yellow : theme.dim,
+                background: isExpanded ? `${theme.yellow}20` : `${theme.dim}15`,
+                border: `1px solid ${isExpanded ? `${theme.yellow}50` : "transparent"}`,
+              }}
+              title="Configure indicator parameters (⚙)"
+            >
+              ⚙
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            className="px-2.5 py-1 rounded text-[10px] font-mono font-medium transition-all"
             style={{
-              background: `${theme.dim}18`,
-              color: theme.dim,
+              background: isActive ? theme.green : "transparent",
+              color: isActive ? theme.bg : theme.dim,
+              border: `1px solid ${isActive ? theme.green : theme.border}`,
             }}
           >
-            {meta.category}
-          </span>
-        </div>
-        <div className="text-[10px] mt-0.5 line-clamp-1" style={{ color: theme.dim }}>
-          {meta.shortDesc}
-        </div>
-        <div className="text-[9px] mt-0.5 font-mono opacity-60">
-          {meta.formula}
+            {isActive ? "ON" : "OFF"}
+          </button>
         </div>
       </div>
 
-      <button
-        type="button"
-        className="px-2.5 py-1 rounded text-[10px] font-mono font-medium transition-all shrink-0"
-        style={{
-          background: isActive ? theme.green : "transparent",
-          color: isActive ? theme.bg : theme.dim,
-          border: `1px solid ${isActive ? theme.green : theme.border}`,
+      {/* Inline Configuration Drawer */}
+      {isExpanded && isConfigurable && onUpdateSettings && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="p-3 border-t space-y-3"
+          style={{
+            borderColor: theme.border,
+            background: `${theme.bg}70`,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.yellow }}>
+              Parameters & Thresholds
+            </span>
+            {onResetSettings && (
+              <button
+                type="button"
+                onClick={() => onResetSettings(meta.id as keyof IndicatorSettings)}
+                className="text-[10px] px-1.5 py-0.5 rounded border hover:opacity-80 transition-opacity"
+                style={{ borderColor: theme.border, color: theme.dim }}
+              >
+                ↺ Reset to Defaults
+              </button>
+            )}
+          </div>
+
+          {/* Indicator-Specific Parameter Fields */}
+          {meta.id === "sma" && (
+            <div className="grid grid-cols-2 gap-2">
+              <ParamInput
+                label="Fast Period"
+                value={settings.sma.fast}
+                min={1}
+                max={500}
+                onChange={(v) => onUpdateSettings("sma", { fast: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Slow Period"
+                value={settings.sma.slow}
+                min={1}
+                max={500}
+                onChange={(v) => onUpdateSettings("sma", { slow: v })}
+                theme={theme}
+              />
+            </div>
+          )}
+
+          {meta.id === "ema" && (
+            <div className="grid grid-cols-2 gap-2">
+              <ParamInput
+                label="Fast Period"
+                value={settings.ema.fast}
+                min={1}
+                max={500}
+                onChange={(v) => onUpdateSettings("ema", { fast: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Slow Period"
+                value={settings.ema.slow}
+                min={1}
+                max={500}
+                onChange={(v) => onUpdateSettings("ema", { slow: v })}
+                theme={theme}
+              />
+            </div>
+          )}
+
+          {meta.id === "bollinger" && (
+            <div className="grid grid-cols-2 gap-2">
+              <ParamInput
+                label="Length (Period)"
+                value={settings.bollinger.period}
+                min={2}
+                max={200}
+                onChange={(v) => onUpdateSettings("bollinger", { period: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="StdDev Multiplier"
+                value={settings.bollinger.stdDev}
+                min={0.1}
+                max={10}
+                step={0.1}
+                onChange={(v) => onUpdateSettings("bollinger", { stdDev: v })}
+                theme={theme}
+              />
+            </div>
+          )}
+
+          {meta.id === "rsi" && (
+            <div className="grid grid-cols-3 gap-2">
+              <ParamInput
+                label="Length"
+                value={settings.rsi.period}
+                min={2}
+                max={100}
+                onChange={(v) => onUpdateSettings("rsi", { period: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Overbought (Upper)"
+                value={settings.rsi.overbought}
+                min={50}
+                max={95}
+                onChange={(v) => onUpdateSettings("rsi", { overbought: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Oversold (Lower)"
+                value={settings.rsi.oversold}
+                min={5}
+                max={50}
+                onChange={(v) => onUpdateSettings("rsi", { oversold: v })}
+                theme={theme}
+              />
+            </div>
+          )}
+
+          {meta.id === "macd" && (
+            <div className="grid grid-cols-3 gap-2">
+              <ParamInput
+                label="Fast Length"
+                value={settings.macd.fast}
+                min={1}
+                max={100}
+                onChange={(v) => onUpdateSettings("macd", { fast: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Slow Length"
+                value={settings.macd.slow}
+                min={1}
+                max={200}
+                onChange={(v) => onUpdateSettings("macd", { slow: v })}
+                theme={theme}
+              />
+              <ParamInput
+                label="Signal Smoothing"
+                value={settings.macd.signal}
+                min={1}
+                max={50}
+                onChange={(v) => onUpdateSettings("macd", { signal: v })}
+                theme={theme}
+              />
+            </div>
+          )}
+
+          {meta.id === "stochrsi" && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-4 gap-2">
+                <ParamInput
+                  label="RSI Length"
+                  value={settings.stochrsi.lengthRSI}
+                  min={2}
+                  max={100}
+                  onChange={(v) => onUpdateSettings("stochrsi", { lengthRSI: v })}
+                  theme={theme}
+                />
+                <ParamInput
+                  label="Stoch Length"
+                  value={settings.stochrsi.lengthStoch}
+                  min={2}
+                  max={100}
+                  onChange={(v) => onUpdateSettings("stochrsi", { lengthStoch: v })}
+                  theme={theme}
+                />
+                <ParamInput
+                  label="%K Smooth"
+                  value={settings.stochrsi.smoothK}
+                  min={1}
+                  max={20}
+                  onChange={(v) => onUpdateSettings("stochrsi", { smoothK: v })}
+                  theme={theme}
+                />
+                <ParamInput
+                  label="%D Smooth"
+                  value={settings.stochrsi.smoothD}
+                  min={1}
+                  max={20}
+                  onChange={(v) => onUpdateSettings("stochrsi", { smoothD: v })}
+                  theme={theme}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ParamInput
+                  label="Overbought Level"
+                  value={settings.stochrsi.overbought}
+                  min={50}
+                  max={95}
+                  onChange={(v) => onUpdateSettings("stochrsi", { overbought: v })}
+                  theme={theme}
+                />
+                <ParamInput
+                  label="Oversold Level"
+                  value={settings.stochrsi.oversold}
+                  min={5}
+                  max={50}
+                  onChange={(v) => onUpdateSettings("stochrsi", { oversold: v })}
+                  theme={theme}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParamInput({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  theme,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (val: number) => void;
+  theme: any;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] truncate" style={{ color: theme.dim }}>
+        {label}
+      </span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => {
+          const num = parseFloat(e.target.value);
+          if (!isNaN(num) && num >= min && num <= max) {
+            onChange(num);
+          }
         }}
-      >
-        {isActive ? "ON" : "OFF"}
-      </button>
+        className="w-full px-2 py-1 text-xs rounded border font-mono outline-none"
+        style={{
+          background: theme.bg,
+          borderColor: theme.border,
+          color: theme.text,
+        }}
+      />
     </div>
   );
 }

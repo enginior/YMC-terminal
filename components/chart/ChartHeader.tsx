@@ -8,6 +8,8 @@ import {
   ChartType,
   DrawMode,
   IndicatorType,
+  IndicatorSettings,
+  DEFAULT_INDICATOR_SETTINGS,
   FAVORITE_TIMEFRAMES,
   MORE_TIMEFRAMES,
   CHART_TYPE_LABELS,
@@ -32,6 +34,12 @@ interface ChartHeaderProps {
   onChangeLiquidationThreshold?: (threshold: number) => void;
   activeIndicators: Set<IndicatorType>;
   onToggleIndicator: (id: IndicatorType) => void;
+  indicatorSettings?: IndicatorSettings;
+  onUpdateIndicatorSettings?: <K extends keyof IndicatorSettings>(
+    key: K,
+    updates: Partial<IndicatorSettings[K]>
+  ) => void;
+  onResetIndicatorSettings?: (key?: keyof IndicatorSettings) => void;
   drawMode?: DrawMode;
   onSetDrawMode?: React.Dispatch<React.SetStateAction<DrawMode>>;
   candlesCount: number;
@@ -61,6 +69,9 @@ export function ChartHeader({
   onChangeLiquidationThreshold,
   activeIndicators,
   onToggleIndicator,
+  indicatorSettings = DEFAULT_INDICATOR_SETTINGS,
+  onUpdateIndicatorSettings,
+  onResetIndicatorSettings,
   drawMode = "none",
   onSetDrawMode,
   candlesCount,
@@ -431,6 +442,9 @@ export function ChartHeader({
         onClose={() => setIndicatorsModalOpen(false)}
         activeIndicators={activeIndicators}
         onToggleIndicator={onToggleIndicator}
+        settings={indicatorSettings}
+        onUpdateSettings={onUpdateIndicatorSettings}
+        onResetSettings={onResetIndicatorSettings}
       />
     </>
   );

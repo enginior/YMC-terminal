@@ -29,6 +29,68 @@ export const CHART_TYPE_DESCRIPTIONS: Record<ChartType, string> = {
 export const CHART_TYPE_KEY = "btc-terminal:chart-type";
 export const SESSION_HL_KEY = "btc-terminal:session-hl";
 export const DRAWINGS_KEY = "btc-terminal:drawings";
+export const INDICATOR_SETTINGS_KEY = "btc-terminal:indicator-settings";
+
+export interface SmaSettings {
+  fast: number;
+  slow: number;
+}
+
+export interface EmaSettings {
+  fast: number;
+  slow: number;
+}
+
+export interface BollingerSettings {
+  period: number;
+  stdDev: number;
+}
+
+export interface RsiSettings {
+  period: number;
+  overbought: number;
+  oversold: number;
+}
+
+export interface MacdSettings {
+  fast: number;
+  slow: number;
+  signal: number;
+}
+
+export interface StochRsiSettings {
+  lengthRSI: number;
+  lengthStoch: number;
+  smoothK: number;
+  smoothD: number;
+  overbought: number;
+  oversold: number;
+}
+
+export interface IndicatorSettings {
+  sma: SmaSettings;
+  ema: EmaSettings;
+  bollinger: BollingerSettings;
+  rsi: RsiSettings;
+  macd: MacdSettings;
+  stochrsi: StochRsiSettings;
+}
+
+export const DEFAULT_INDICATOR_SETTINGS: IndicatorSettings = {
+  sma: { fast: 20, slow: 50 },
+  ema: { fast: 20, slow: 50 },
+  bollinger: { period: 20, stdDev: 2 },
+  rsi: { period: 14, overbought: 70, oversold: 30 },
+  macd: { fast: 12, slow: 26, signal: 9 },
+  stochrsi: {
+    lengthRSI: 14,
+    lengthStoch: 14,
+    smoothK: 3,
+    smoothD: 3,
+    overbought: 80,
+    oversold: 20,
+  },
+};
 
 export const INDICATOR_LABELS: Record<IndicatorType, string> = {
   sma: "SMA 20/50",
@@ -121,10 +183,14 @@ export const INDICATOR_METAS: IndicatorMeta[] = [
 
 /** Shape of the memoised indicator values. */
 export type ComputedValues = {
-  sma20: (number | null)[];
-  sma50: (number | null)[];
-  ema20: (number | null)[];
-  ema50: (number | null)[];
+  smaFast: (number | null)[];
+  smaSlow: (number | null)[];
+  sma20?: (number | null)[];
+  sma50?: (number | null)[];
+  emaFast: (number | null)[];
+  emaSlow: (number | null)[];
+  ema20?: (number | null)[];
+  ema50?: (number | null)[];
   bb: { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] };
   rsi: (number | null)[];
   macd: { macdLine: (number | null)[]; signalLine: (number | null)[]; histogram: (number | null)[] };
@@ -138,12 +204,12 @@ export const OVERLAY_SPECS: Record<
   { colorKey: keyof Theme; values: (c: ComputedValues) => (number | null)[] }[]
 > = {
   sma: [
-    { colorKey: "blue", values: (c) => c.sma20 },
-    { colorKey: "yellow", values: (c) => c.sma50 },
+    { colorKey: "blue", values: (c) => c.smaFast },
+    { colorKey: "yellow", values: (c) => c.smaSlow },
   ],
   ema: [
-    { colorKey: "green", values: (c) => c.ema20 },
-    { colorKey: "red", values: (c) => c.ema50 },
+    { colorKey: "green", values: (c) => c.emaFast },
+    { colorKey: "red", values: (c) => c.emaSlow },
   ],
   bollinger: [
     { colorKey: "dim", values: (c) => c.bb.upper },

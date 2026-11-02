@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { sma, ema, rsi, macd, bollingerBands, stochRsi, cvd } from "@/lib/indicators";
 import { Candle } from "@/lib/types";
+import { DEFAULT_INDICATOR_SETTINGS } from "@/components/chart/types";
 
 function makeCandles(prices: number[]): Candle[] {
   return prices.map((p, idx) => ({
@@ -171,6 +172,57 @@ describe("technical indicators", () => {
 
     it("returns empty array when candle data is empty", () => {
       expect(cvd([])).toEqual([]);
+    });
+  });
+
+  describe("configurable indicator parameters (Spec 010)", () => {
+    it("computes macd with custom fast, slow, and signal periods", () => {
+      const prices = Array.from({ length: 30 }, (_, i) => 100 + i * 2);
+      const candles = makeCandles(prices);
+      // Fast=5, Slow=10, Signal=3
+      const { macdLine, signalLine, histogram } = macd(candles, 5, 10, 3);
+
+      expect(macdLine).toHaveLength(30);
+      expect(signalLine).toHaveLength(30);
+      expect(histogram).toHaveLength(30);
+
+      // Slow period is 10, so index 9 is first valid macd value
+      expect(macdLine[8]).toBeNull();
+      expect(macdLine[9]).not.toBeNull();
+
+      // Signal line needs 3 bars of macdLine (indices 9, 10, 11) -> index 11 is first valid signal
+      expect(signalLine[10]).toBeNull();
+      expect(signalLine[11]).not.toBeNull();
+      expect(histogram[11]).toBeCloseTo(macdLine[11]! - signalLine[11]!);
+    });
+
+    it("computes custom scalp EMA (9/21) and macro SMA (200)", () => {
+      const prices = Array.from({ length: 25 }, (_, i) => 50 + i);
+      const candles = makeCandles(prices);
+
+      const ema9 = ema(candles, 9);
+      const ema21 = ema(candles, 21);
+
+      expect(ema9[7]).toBeNull();
+      expect(ema9[8]).not.toBeNull(); // Index 8 is 9th element
+      expect(ema21[19]).toBeNull();
+      expect(ema21[20]).not.toBeNull(); // Index 20 is 21st element
+    });
+
+    it("verifies DEFAULT_INDICATOR_SETTINGS matches standard technical baseline", () => {
+      expect(DEFAULT_INDICATOR_SETTINGS.sma).toEqual({ fast: 20, slow: 50 });
+      expect(DEFAULT_INDICATOR_SETTINGS.ema).toEqual({ fast: 20, slow: 50 });
+      expect(DEFAULT_INDICATOR_SETTINGS.bollinger).toEqual({ period: 20, stdDev: 2 });
+      expect(DEFAULT_INDICATOR_SETTINGS.rsi).toEqual({ period: 14, overbought: 70, oversold: 30 });
+      expect(DEFAULT_INDICATOR_SETTINGS.macd).toEqual({ fast: 12, slow: 26, signal: 9 });
+      expect(DEFAULT_INDICATOR_SETTINGS.stochrsi).toEqual({
+        lengthRSI: 14,
+        lengthStoch: 14,
+        smoothK: 3,
+        smoothD: 3,
+        overbought: 80,
+        oversold: 20,
+      });
     });
   });
 });

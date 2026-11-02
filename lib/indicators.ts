@@ -76,26 +76,30 @@ export function rsi(data: Candle[], period: number = 14): (number | null)[] {
   return result;
 }
 
-export function macd(data: Candle[]): {
+export function macd(
+  data: Candle[],
+  fastPeriod: number = 12,
+  slowPeriod: number = 26,
+  signalPeriod: number = 9
+): {
   macdLine: (number | null)[];
   signalLine: (number | null)[];
   histogram: (number | null)[];
 } {
-  const ema12 = ema(data, 12);
-  const ema26 = ema(data, 26);
+  const emaFast = ema(data, fastPeriod);
+  const emaSlow = ema(data, slowPeriod);
 
   const macdLine: (number | null)[] = [];
   for (let i = 0; i < data.length; i++) {
-    if (ema12[i] === null || ema26[i] === null) {
+    if (emaFast[i] === null || emaSlow[i] === null) {
       macdLine.push(null);
     } else {
-      macdLine.push(ema12[i]! - ema26[i]!);
+      macdLine.push(emaFast[i]! - emaSlow[i]!);
     }
   }
 
-  const validMacd = macdLine.filter((v): v is number => v !== null);
   const signalLine: (number | null)[] = [];
-  const multiplier = 2 / (9 + 1);
+  const multiplier = 2 / (signalPeriod + 1);
   let signalEma: number | null = null;
 
   for (let i = 0; i < macdLine.length; i++) {
@@ -103,7 +107,7 @@ export function macd(data: Candle[]): {
       signalLine.push(null);
     } else if (signalEma === null) {
       const idx = macdLine.findIndex((v) => v !== null);
-      if (i === idx + 8) {
+      if (i === idx + (signalPeriod - 1)) {
         const slice = macdLine.slice(idx, i + 1).filter((v): v is number => v !== null);
         signalEma = slice.reduce((a, b) => a + b, 0) / slice.length;
         signalLine.push(signalEma);

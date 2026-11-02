@@ -152,6 +152,9 @@ function PriceChart({
   const {
     activeIndicators,
     toggleIndicator,
+    indicatorSettings,
+    updateIndicatorSettings,
+    resetIndicatorSettings,
   } = useIndicatorPanes({
     chartRef,
     candles,
@@ -279,6 +282,9 @@ function PriceChart({
         onChangeLiquidationThreshold={setLiquidationThreshold}
         activeIndicators={activeIndicators}
         onToggleIndicator={toggleIndicator}
+        indicatorSettings={indicatorSettings}
+        onUpdateIndicatorSettings={updateIndicatorSettings}
+        onResetIndicatorSettings={resetIndicatorSettings}
         drawMode={drawMode}
         onSetDrawMode={setDrawMode}
         candlesCount={candles.length}

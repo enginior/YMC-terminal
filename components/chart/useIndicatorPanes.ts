@@ -21,6 +21,9 @@ import {
   ComputedValues,
   OVERLAYS,
   OVERLAY_SPECS,
+  IndicatorSettings,
+  DEFAULT_INDICATOR_SETTINGS,
+  INDICATOR_SETTINGS_KEY,
 } from "./types";
 
 interface UseIndicatorPanesOptions {
@@ -54,9 +57,68 @@ export function useIndicatorPanes({
   timeframe,
 }: UseIndicatorPanesOptions) {
   const [activeIndicators, setActiveIndicators] = useState<Set<IndicatorType>>(new Set());
+  const [settings, setSettings] = useState<IndicatorSettings>(DEFAULT_INDICATOR_SETTINGS);
+  const skipSettingsSaveRef = useRef(true);
   const [derivativesData, setDerivativesData] = useState<DerivativesData | null>(null);
   const derivativesDataRef = useRef<DerivativesData | null>(null);
   derivativesDataRef.current = derivativesData;
+
+  // Load persisted indicator settings from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(INDICATOR_SETTINGS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setSettings((prev) => ({
+            ...prev,
+            ...parsed,
+            sma: { ...prev.sma, ...parsed.sma },
+            ema: { ...prev.ema, ...parsed.ema },
+            bollinger: { ...prev.bollinger, ...parsed.bollinger },
+            rsi: { ...prev.rsi, ...parsed.rsi },
+            macd: { ...prev.macd, ...parsed.macd },
+            stochrsi: { ...prev.stochrsi, ...parsed.stochrsi },
+          }));
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Persist indicator settings to localStorage
+  useEffect(() => {
+    if (skipSettingsSaveRef.current) {
+      skipSettingsSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(INDICATOR_SETTINGS_KEY, JSON.stringify(settings));
+    } catch {}
+  }, [settings]);
+
+  const updateSettings = useCallback(
+    <K extends keyof IndicatorSettings>(key: K, updates: Partial<IndicatorSettings[K]>) => {
+      setSettings((prev) => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          ...updates,
+        },
+      }));
+    },
+    []
+  );
+
+  const resetSettings = useCallback((key?: keyof IndicatorSettings) => {
+    if (key) {
+      setSettings((prev) => ({
+        ...prev,
+        [key]: { ...DEFAULT_INDICATOR_SETTINGS[key] },
+      }));
+    } else {
+      setSettings(DEFAULT_INDICATOR_SETTINGS);
+    }
+  }, []);
 
   // Series created for indicators, torn down and rebuilt when the set changes.
   const indicatorRefs = useRef<Map<IndicatorType, ISeriesApi<any>[]>>(new Map());
@@ -97,18 +159,32 @@ export function useIndicatorPanes({
 
   const computed = useMemo(() => {
     if (candles.length === 0) return null;
+    const smaFast = sma(candles, settings.sma.fast);
+    const smaSlow = sma(candles, settings.sma.slow);
+    const emaFast = ema(candles, settings.ema.fast);
+    const emaSlow = ema(candles, settings.ema.slow);
     return {
-      sma20: sma(candles, 20),
-      sma50: sma(candles, 50),
-      ema20: ema(candles, 20),
-      ema50: ema(candles, 50),
-      bb: bollingerBands(candles, 20, 2),
-      rsi: rsi(candles, 14),
-      macd: macd(candles),
-      stochRsi: stochRsi(candles, 14, 14, 3, 3),
+      smaFast,
+      smaSlow,
+      sma20: smaFast,
+      sma50: smaSlow,
+      emaFast,
+      emaSlow,
+      ema20: emaFast,
+      ema50: emaSlow,
+      bb: bollingerBands(candles, settings.bollinger.period, settings.bollinger.stdDev),
+      rsi: rsi(candles, settings.rsi.period),
+      macd: macd(candles, settings.macd.fast, settings.macd.slow, settings.macd.signal),
+      stochRsi: stochRsi(
+        candles,
+        settings.stochrsi.lengthRSI,
+        settings.stochrsi.lengthStoch,
+        settings.stochrsi.smoothK,
+        settings.stochrsi.smoothD
+      ),
       cvd: cvd(candles),
     };
-  }, [candles]);
+  }, [candles, settings]);
 
   const computedRef = useRef<ComputedValues | null>(null);
   computedRef.current = computed;
@@ -215,8 +291,8 @@ export function useIndicatorPanes({
       r.setData(line(comp.rsi));
       const rsiBand = new PriceBandPrimitive();
       r.attachPrimitive(rsiBand);
-      rsiBand.setBand(70, 30, `${theme.dim}22`);
-      [70, 50, 30].forEach((price) =>
+      rsiBand.setBand(settings.rsi.overbought, settings.rsi.oversold, `${theme.dim}22`);
+      [settings.rsi.overbought, 50, settings.rsi.oversold].forEach((price) =>
         r.createPriceLine({
           price,
           color: theme.dim,
@@ -278,9 +354,9 @@ export function useIndicatorPanes({
 
       const stochBand = new PriceBandPrimitive();
       kSeries.attachPrimitive(stochBand);
-      stochBand.setBand(80, 20, `${theme.dim}22`);
+      stochBand.setBand(settings.stochrsi.overbought, settings.stochrsi.oversold, `${theme.dim}22`);
 
-      [80, 20].forEach((price) =>
+      [settings.stochrsi.overbought, settings.stochrsi.oversold].forEach((price) =>
         kSeries.createPriceLine({
           price,
           color: theme.dim,
@@ -391,7 +467,18 @@ export function useIndicatorPanes({
       cvdSeries.setData(line(comp.cvd));
       indicatorRefs.current.set("cvd", [cvdSeries]);
     }
-  }, [activeIndicators, theme, chartEpoch, line, histData, chartRef]);
+  }, [
+    activeIndicators,
+    theme,
+    chartEpoch,
+    line,
+    histData,
+    chartRef,
+    settings.rsi.overbought,
+    settings.rsi.oversold,
+    settings.stochrsi.overbought,
+    settings.stochrsi.oversold,
+  ]);
 
   /* ---------------- data effect: push fresh values on every tick ---------------- */
 
@@ -481,5 +568,8 @@ export function useIndicatorPanes({
     activeIndicators,
     toggleIndicator,
     computed,
+    indicatorSettings: settings,
+    updateIndicatorSettings: updateSettings,
+    resetIndicatorSettings: resetSettings,
   };
 }
