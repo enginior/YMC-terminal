@@ -78,7 +78,7 @@ lib/
 ├── dayLines.ts             # UTC day separators via a lightweight-charts series primitive
 ├── bands.ts                # Shaded price band (RSI/Stoch RSI neutral zone), series primitive
 ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
-├── sessions.ts             # Global market sessions schedule, IANA timezone conversion & DST engine
+├── sessions.ts             # Global market sessions schedule, two-pass zoned→UTC, wrap segments & DST engine
 └── links.ts                # Canonical repository links
 __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
@@ -214,9 +214,10 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
   the second load reads the clobbered value). Applied in: the
   `skipNextSaveRef` / `skipChartTypeSaveRef` / `skipSessionHLSaveRef` / `skipLiqSaveRef` guards in `PriceChart`
   (drawings, chart type, session H/L, and liquidation markers persistence), `skipThemeSaveRef` / `skipSavedThemesSaveRef`
-  in `ThemeContext`, `skipNextSaveRef` in `useAlerts`, and `skipNextSaveRef` in `EconomicCalendarPanel` (calendar filters persistence; theme was silently resetting to Default, and
-  alerts + their prefs were wiped, on every reload before this).
-- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`, `btc-terminal:liq-markers` (plus opt-in read-only `btc-terminal:debug-renders`).
+  in `ThemeContext`, `skipNextSaveRef` in `useAlerts`, `skipNextSaveRef` in `EconomicCalendarPanel` (calendar filters persistence),
+  and `skipNextSaveRef` in `MarketSessionsPanel` (sessions mode/tz preferences persistence).
+- localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`, `btc-terminal:liq-markers`, `btc-terminal:sessions-prefs` (plus opt-in read-only `btc-terminal:debug-renders`).
+- **Sessions panel uses Tailwind container queries.** Widget breakpoints are panel width, not viewport width: `< 360px` compact (single-line rows, 6h ruler), `360–560px` medium, and `≥ 560px` expanded (2×2 cards, 2h ruler, tz selector). In the grid, the sessions panel spans 2 columns with `gridAutoFlow: "row dense"`.
 
 ## Known Limitations
 - static-klines refreshes daily at 00:00 UTC; the tail is backfilled from Binance REST

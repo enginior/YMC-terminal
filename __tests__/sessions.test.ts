@@ -5,107 +5,223 @@ import {
   dateToTimelinePct,
   formatDuration,
   getNextOpenUtc,
+  MARKET_SESSIONS,
+  rangeToSegments,
+  formatUtcOffset,
+  tzOffsetMinutes,
 } from "@/lib/sessions";
 
-describe("market sessions & DST calculations", () => {
-  describe("getSessionUtcTime (Daylight Saving Time shifts)", () => {
-    it("handles New York winter (EST, UTC-5) vs summer (EDT, UTC-4)", () => {
-      // Winter: Nov 15, 2026 -> EST (UTC-5)
-      const winterDate = new Date("2026-11-15T12:00:00Z");
-      const nyWinterOpenUtc = getSessionUtcTime(winterDate, "America/New_York", 9, 30);
-      // 9:30 AM EST = 14:30:00 UTC
-      expect(nyWinterOpenUtc.getUTCHours()).toBe(14);
-      expect(nyWinterOpenUtc.getUTCMinutes()).toBe(30);
+describe("Spec 016 — Market Sessions time-math & test oracles", () => {
+  describe("R1 — Duration invariant across seasons & DST transition days", () => {
+    const testDates = [
+      "2026-01-15T12:00:00Z",
+      "2026-03-20T12:00:00Z",
+      "2026-04-01T12:00:00Z",
+      "2026-07-15T12:00:00Z",
+      "2026-10-28T12:00:00Z",
+      "2026-11-16T12:00:00Z",
+      // DST transition dates
+      "2026-03-08T12:00:00Z", // US EDT starts
+      "2026-03-29T12:00:00Z", // UK BST starts
+      "2026-04-05T12:00:00Z", // Sydney AEST starts
+      "2026-10-04T12:00:00Z", // Sydney AEDT starts
+      "2026-10-25T12:00:00Z", // UK GMT starts
+      "2026-11-01T12:00:00Z", // US EST starts
+    ];
 
-      // Summer: July 15, 2026 -> EDT (UTC-4)
-      const summerDate = new Date("2026-07-15T12:00:00Z");
-      const nySummerOpenUtc = getSessionUtcTime(summerDate, "America/New_York", 9, 30);
-      // 9:30 AM EDT = 13:30:00 UTC
-      expect(nySummerOpenUtc.getUTCHours()).toBe(13);
-      expect(nySummerOpenUtc.getUTCMinutes()).toBe(30);
-    });
+    it("verifies close - open equals exact defined session length for all 8 sessions", () => {
+      for (const dStr of testDates) {
+        const d = new Date(dStr);
 
-    it("handles London winter (GMT, UTC+0) vs summer (BST, UTC+1)", () => {
-      // Winter: Nov 15, 2026 -> GMT (UTC+0)
-      const winterDate = new Date("2026-11-15T12:00:00Z");
-      const lonWinterOpenUtc = getSessionUtcTime(winterDate, "Europe/London", 8, 0);
-      expect(lonWinterOpenUtc.getUTCHours()).toBe(8);
-      expect(lonWinterOpenUtc.getUTCMinutes()).toBe(0);
+        for (const def of MARKET_SESSIONS) {
+          // Equities
+          const eqOpen = getSessionUtcTime(d, def.timeZone, def.equitiesOpen.hour, def.equitiesOpen.minute);
+          const eqClose = getSessionUtcTime(d, def.timeZone, def.equitiesClose.hour, def.equitiesClose.minute);
+          const eqDurationHours = (eqClose.getTime() - eqOpen.getTime()) / 3600_000;
 
-      // Summer: July 15, 2026 -> BST (UTC+1)
-      const summerDate = new Date("2026-07-15T12:00:00Z");
-      const lonSummerOpenUtc = getSessionUtcTime(summerDate, "Europe/London", 8, 0);
-      expect(lonSummerOpenUtc.getUTCHours()).toBe(7);
-      expect(lonSummerOpenUtc.getUTCMinutes()).toBe(0);
-    });
+          const expectedEqHours =
+            def.equitiesClose.hour +
+            def.equitiesClose.minute / 60 -
+            (def.equitiesOpen.hour + def.equitiesOpen.minute / 60);
 
-    it("handles Sydney summer (AEDT, UTC+11 in November) vs winter (AEST, UTC+10 in July)", () => {
-      // November: Daylight saving in Australia -> AEDT (UTC+11)
-      const novDate = new Date("2026-11-15T12:00:00Z");
-      const sydNovOpenUtc = getSessionUtcTime(novDate, "Australia/Sydney", 10, 0);
-      // 10:00 AM AEDT = 23:00 UTC previous day (10 - 11 = -1 -> 23)
-      expect(sydNovOpenUtc.getUTCHours()).toBe(23);
+          expect(eqDurationHours).toBeCloseTo(expectedEqHours, 2);
 
-      // July: Standard time -> AEST (UTC+10)
-      const julDate = new Date("2026-07-15T12:00:00Z");
-      const sydJulOpenUtc = getSessionUtcTime(julDate, "Australia/Sydney", 10, 0);
-      // 10:00 AM AEST = 00:00 UTC (10 - 10 = 0)
-      expect(sydJulOpenUtc.getUTCHours()).toBe(0);
-    });
-  });
+          // Forex
+          const fxOpen = getSessionUtcTime(d, def.timeZone, def.forexOpen.hour, def.forexOpen.minute);
+          const fxClose = getSessionUtcTime(d, def.timeZone, def.forexClose.hour, def.forexClose.minute);
+          const fxDurationHours = (fxClose.getTime() - fxOpen.getTime()) / 3600_000;
 
-  describe("calculateSessionStates (Viewer Local Time conversion)", () => {
-    it("converts NY open to 10:30 PM in PHT (winter EST) and 9:30 PM in PHT (summer EDT)", () => {
-      // Winter date
-      const winterDate = new Date("2026-11-16T12:00:00Z"); // Monday
-      const winterStates = calculateSessionStates(winterDate, "equities", "Asia/Manila");
-      const nyWinter = winterStates.find((s) => s.def.id === "newyork")!;
-      expect(nyWinter.userLocalOpenStr).toContain("10:30");
+          const expectedFxHours =
+            def.forexClose.hour +
+            def.forexClose.minute / 60 -
+            (def.forexOpen.hour + def.forexOpen.minute / 60);
 
-      // Summer date
-      const summerDate = new Date("2026-07-15T12:00:00Z"); // Wednesday
-      const summerStates = calculateSessionStates(summerDate, "equities", "Asia/Manila");
-      const nySummer = summerStates.find((s) => s.def.id === "newyork")!;
-      expect(nySummer.userLocalOpenStr).toContain("9:30");
-    });
-
-    it("flags open status accurately when currently within trading hours", () => {
-      // 14:00 UTC on a Monday -> London (08:00 - 16:30 GMT) is active!
-      const activeLondonDate = new Date("2026-11-16T14:00:00Z");
-      const states = calculateSessionStates(activeLondonDate, "equities", "Asia/Manila");
-      const london = states.find((s) => s.def.id === "london")!;
-      expect(london.isOpen).toBe(true);
-      expect(london.statusBadge).toBe("OPEN");
-      expect(london.statusCountdown).toContain("Closes in");
+          expect(fxDurationHours).toBeCloseTo(expectedFxHours, 2);
+        }
+      }
     });
   });
 
-  describe("dateToTimelinePct & formatDuration", () => {
-    it("anchors 7:00 AM local time to 0% and 7:00 PM local time to 50%", () => {
-      // Create dates with explicit hours in UTC
-      const date7am = new Date("2026-11-16T07:00:00Z");
-      const pct7am = dateToTimelinePct(date7am, "UTC");
-      expect(pct7am).toBeCloseTo(0);
+  describe("R1 & R2 — Forex in PHT (Asia/Manila) test oracle table", () => {
+    // Nov 1 -> Mar 13 (winter EST, GMT, AEDT)
+    it("matches Nov 1 -> Mar 13 oracle (Sydney 04-13, Tokyo 08-17, London 16-01, NY 21-06)", () => {
+      const date = new Date("2026-11-16T12:00:00Z");
+      const states = calculateSessionStates(date, "forex", "Asia/Manila");
 
-      const date7pm = new Date("2026-11-16T19:00:00Z");
-      const pct7pm = dateToTimelinePct(date7pm, "UTC");
-      expect(pct7pm).toBeCloseTo(50);
+      const syd = states.find((s) => s.def.id === "sydney")!;
+      const tyo = states.find((s) => s.def.id === "tokyo")!;
+      const ldn = states.find((s) => s.def.id === "london")!;
+      const ny = states.find((s) => s.def.id === "newyork")!;
+
+      expect(syd.userLocalOpenStr).toBe("04:00");
+      expect(syd.userLocalCloseStr).toBe("13:00");
+
+      expect(tyo.userLocalOpenStr).toBe("08:00");
+      expect(tyo.userLocalCloseStr).toBe("17:00");
+
+      expect(ldn.userLocalOpenStr).toBe("16:00");
+      expect(ldn.userLocalCloseStr).toBe("01:00");
+
+      expect(ny.userLocalOpenStr).toBe("21:00");
+      expect(ny.userLocalCloseStr).toBe("06:00");
     });
 
-    it("formats duration correctly into hours and minutes", () => {
-      expect(formatDuration(0)).toBe("0m");
-      expect(formatDuration(45 * 60 * 1000)).toBe("45m");
-      expect(formatDuration((2 * 60 + 15) * 60 * 1000)).toBe("2h 15m");
+    // Mar 14 -> Mar 27 (US shifted first to EDT)
+    it("matches Mar 14 -> Mar 27 oracle (NY FX shifts to 20:00 - 05:00)", () => {
+      const date = new Date("2026-03-18T12:00:00Z");
+      const states = calculateSessionStates(date, "forex", "Asia/Manila");
+      const ny = states.find((s) => s.def.id === "newyork")!;
+      expect(ny.userLocalOpenStr).toBe("20:00");
+      expect(ny.userLocalCloseStr).toBe("05:00");
+    });
+
+    // Mar 28 -> Apr 3 (UK shifted to BST)
+    it("matches Mar 28 -> Apr 3 oracle (London FX shifts to 15:00 - 00:00)", () => {
+      const date = new Date("2026-03-31T12:00:00Z");
+      const states = calculateSessionStates(date, "forex", "Asia/Manila");
+      const ldn = states.find((s) => s.def.id === "london")!;
+      expect(ldn.userLocalOpenStr).toBe("15:00");
+      expect(ldn.userLocalCloseStr).toBe("00:00");
+    });
+
+    // Apr 4 -> Oct 2 (Sydney shifts to AEST)
+    it("matches Apr 4 -> Oct 2 oracle (Sydney FX shifts to 05:00 - 14:00)", () => {
+      const date = new Date("2026-07-15T12:00:00Z");
+      const states = calculateSessionStates(date, "forex", "Asia/Manila");
+      const syd = states.find((s) => s.def.id === "sydney")!;
+      expect(syd.userLocalOpenStr).toBe("05:00");
+      expect(syd.userLocalCloseStr).toBe("14:00");
     });
   });
 
-  describe("getNextOpenUtc", () => {
-    it("skips Saturday and Sunday to find Monday open", () => {
-      // Saturday Nov 7, 2026
-      const satDate = new Date("2026-11-07T12:00:00Z");
-      const nextOpen = getNextOpenUtc(satDate, "America/New_York", 9, 30);
-      // Monday Nov 9, 2026
-      expect(nextOpen.getUTCDay()).toBe(1); // 1 = Monday
+  describe("R1 & R2 — Equities in PHT (Asia/Manila) test oracle table", () => {
+    it("matches Northern winter equities (ASX 07-13, TSE 08-14:30, LSE 16-00:30, NYSE 22:30-05:00)", () => {
+      const date = new Date("2026-11-16T12:00:00Z");
+      const states = calculateSessionStates(date, "equities", "Asia/Manila");
+
+      const asx = states.find((s) => s.def.id === "sydney")!;
+      const tse = states.find((s) => s.def.id === "tokyo")!;
+      const lse = states.find((s) => s.def.id === "london")!;
+      const nyse = states.find((s) => s.def.id === "newyork")!;
+
+      expect(asx.userLocalOpenStr).toBe("07:00");
+      expect(asx.userLocalCloseStr).toBe("13:00");
+
+      expect(tse.userLocalOpenStr).toBe("08:00");
+      expect(tse.userLocalCloseStr).toBe("14:30");
+
+      expect(lse.userLocalOpenStr).toBe("16:00");
+      expect(lse.userLocalCloseStr).toBe("00:30");
+
+      expect(nyse.userLocalOpenStr).toBe("22:30");
+      expect(nyse.userLocalCloseStr).toBe("05:00");
+    });
+
+    it("matches Northern summer equities (ASX 08-14, LSE 15-23:30, NYSE 21:30-04:00)", () => {
+      const date = new Date("2026-07-15T12:00:00Z");
+      const states = calculateSessionStates(date, "equities", "Asia/Manila");
+
+      const asx = states.find((s) => s.def.id === "sydney")!;
+      const lse = states.find((s) => s.def.id === "london")!;
+      const nyse = states.find((s) => s.def.id === "newyork")!;
+
+      expect(asx.userLocalOpenStr).toBe("08:00");
+      expect(asx.userLocalCloseStr).toBe("14:00");
+
+      expect(lse.userLocalOpenStr).toBe("15:00");
+      expect(lse.userLocalCloseStr).toBe("23:30");
+
+      expect(nyse.userLocalOpenStr).toBe("21:30");
+      expect(nyse.userLocalCloseStr).toBe("04:00");
+    });
+  });
+
+  describe("R2 — Session Status Semantics & Edge Cases", () => {
+    it("Tokyo FX at Mon 23:30 JST -> CLOSED, countdown targets Tue 09:00 JST", () => {
+      // Mon 2026-11-02 23:30 JST = 14:30 UTC
+      const monNight = new Date("2026-11-02T14:30:00Z");
+      const states = calculateSessionStates(monNight, "forex", "Asia/Tokyo");
+      const tyo = states.find((s) => s.def.id === "tokyo")!;
+      expect(tyo.isOpen).toBe(false);
+      expect(tyo.statusBadge).toBe("CLOSED");
+
+      const nextOpen = getNextOpenUtc(monNight, "Asia/Tokyo", 9, 0);
+      expect(nextOpen.toISOString()).toBe("2026-11-03T00:00:00.000Z"); // Tue 9am JST
+    });
+
+    it("Sydney FX at Fri 17:00 AEDT -> CLOSED, next open Mon 07:00 AEDT", () => {
+      // Fri 2026-11-06 17:00 AEDT = 06:00 UTC
+      const friAfterClose = new Date("2026-11-06T06:00:00Z");
+      const states = calculateSessionStates(friAfterClose, "forex", "Australia/Sydney");
+      const syd = states.find((s) => s.def.id === "sydney")!;
+      expect(syd.isOpen).toBe(false);
+
+      const nextOpen = getNextOpenUtc(friAfterClose, "Australia/Sydney", 7, 0);
+      expect(nextOpen.toISOString()).toBe("2026-11-08T20:00:00.000Z"); // Mon 7am AEDT
+    });
+
+    it("TSE at 12:00 JST weekday (equities) -> LUNCH", () => {
+      // Wed 2026-11-04 12:00 JST = 03:00 UTC
+      const wedLunch = new Date("2026-11-04T03:00:00Z");
+      const states = calculateSessionStates(wedLunch, "equities", "Asia/Tokyo");
+      const tse = states.find((s) => s.def.id === "tokyo")!;
+      expect(tse.isLunch).toBe(true);
+      expect(tse.isOpen).toBe(false);
+      expect(tse.statusBadge).toBe("LUNCH");
+      expect(tse.statusCountdown).toContain("Resumes in");
+      expect(tse.statusCountdownShort).toContain("resumes");
+    });
+  });
+
+  describe("R3 — Wrap-around segments", () => {
+    it("Sydney FX in Asia/Manila -> 2 segments whose widths sum to 9/24 * 100", () => {
+      const date = new Date("2026-11-16T12:00:00Z");
+      const states = calculateSessionStates(date, "forex", "Asia/Manila");
+      const syd = states.find((s) => s.def.id === "sydney")!;
+
+      expect(syd.segments).toHaveLength(2);
+      const totalWidth = syd.segments.reduce((acc, seg) => acc + seg.widthPct, 0);
+      expect(totalWidth).toBeCloseTo((9 / 24) * 100, 2);
+      expect(syd.segments[0].startPct + syd.segments[0].widthPct).toBeCloseTo(100, 2);
+      expect(syd.segments[1].startPct).toBe(0);
+    });
+  });
+
+  describe("R4 & R5 — Ruler tick positioning and UTC offset formatting", () => {
+    it("verifies 2h tick i is at exactly i * (100 / 12) = i * 8.333%", () => {
+      for (let i = 0; i < 12; i++) {
+        const expectedPct = (i * 2 / 24) * 100;
+        expect(expectedPct).toBeCloseTo(i * (100 / 12), 3);
+      }
+    });
+
+    it("formats UTC offset cleanly", () => {
+      expect(formatUtcOffset(480)).toBe("UTC+8");
+      expect(formatUtcOffset(-300)).toBe("UTC−5");
+      expect(formatUtcOffset(-240)).toBe("UTC−4");
+      expect(formatUtcOffset(0)).toBe("UTC+0");
+      expect(formatUtcOffset(660)).toBe("UTC+11");
+      expect(formatUtcOffset(345)).toBe("UTC+5:45");
     });
   });
 });

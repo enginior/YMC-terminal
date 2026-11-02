@@ -129,7 +129,7 @@ ymc-terminal/
 - Watchlist with inline 24h trend sparklines, notional quote volume, and 1-click sorting (Gainers, Losers, Volume, A-Z)
 - Crypto Market Heatmap: 24h volume-weighted squarified treemap widget with 1-click chart selection
 - Market sentiment panel (F&G gauge, funding rates, countdown, OI, Global Long/Short account ratio)
-- Market Sessions & Trading Hours panel: Forex Factory-style 24-hour visual horizontal timeline with live NOW beacon line, automatic IANA timezone conversion, DST adjustment, and Equities (Cash Bell) vs Forex modes
+- Market Sessions & Trading Hours panel: Forex Factory-style 24-hour visual horizontal timeline with live NOW beacon line, automatic two-pass IANA timezone conversion, wrap-around segments, DST adjustment, TSE lunch break, UTC offset display, and Equities (Cash Bell) vs Forex modes
 - News feed with bull/bear sentiment filter
 - Drag-and-drop panel reordering (persisted)
 - Command bar with keyboard shortcuts (`/` to focus, `Esc` to clear, `?` for cheat sheet modal)
@@ -264,4 +264,4 @@ Deferred rather than abandoned. Ordered roughly by value per unit of effort. See
 - localStorage keys: `btc-terminal:theme`, `btc-terminal:themes`,
   `btc-terminal:alerts`, `btc-terminal:alert-prefs`, `btc-terminal:panel-order`,
   `btc-terminal:drawings`, `btc-terminal:chart-type`, `btc-terminal:session-hl`,
-  `btc-terminal:calendar-filters`, `btc-terminal:liq-markers`
+  `btc-terminal:calendar-filters`, `btc-terminal:liq-markers`, `btc-terminal:sessions-prefs`

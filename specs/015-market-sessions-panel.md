@@ -1,6 +1,6 @@
 # 015 — Market Sessions & Global Trading Hours Panel
 
-**Status:** Complete  
+**Status:** Complete (Revision $\to$ see [016](./016-market-sessions-fix-and-widget-layout.md))  
 **Priority:** P1 · **Effort:** M  
 **Depends on:** 000 (Baseline audit), 003 (Tick store render isolation)
 

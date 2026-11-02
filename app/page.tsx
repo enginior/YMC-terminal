@@ -217,8 +217,8 @@ export default function Home() {
     const index = panelOrder.indexOf(id);
     // `key` is passed explicitly by the caller — spreading it triggers a React warning
     const props = {
-      height: id === "news" ? 300 : 200,
-      span: (id === "news" ? 2 : 1) as 1 | 2,
+      height: id === "news" ? 300 : id === "sessions" ? 200 : 200,
+      span: (id === "news" || id === "sessions" ? 2 : 1) as 1 | 2,
       onDragStart: () => handleDragStart(index),
       onDragOver: noDragOver,
       onDrop: () => handleDrop(index),
@@ -545,7 +545,7 @@ export default function Home() {
           </div>
 
           <div className="col-span-3 overflow-y-auto min-h-0" style={{ background: theme.panel }}>
-            <div className="grid grid-cols-2 gap-px" style={{ background: theme.border }}>
+            <div className="grid grid-cols-2 gap-px" style={{ background: theme.border, gridAutoFlow: "row dense" }}>
               {panelOrder.map(renderPanel)}
             </div>
           </div>

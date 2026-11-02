@@ -43,7 +43,8 @@ for the **implementer agent** (writes the code). One feature or update = one fil
 | 008 | [Drawing properties & history (Undo/Redo)](./008-drawing-properties-history.md) | Done |
 | 013 | [Real-time liquidation markers on chart](./013-liquidation-markers.md) | Done |
 | 012 | [Open Interest, Funding Rate & CVD sub-panes](./012-oi-funding-cvd-panes.md) | Done |
-| 015 | [Market Sessions & Trading Hours Panel](./015-market-sessions-panel.md) | Done |
+| 015 | [Market Sessions & Trading Hours Panel](./015-market-sessions-panel.md) | Done (revised by 016) |
+| 016 | [Market Sessions: time-math fix, wrap bars & widget layout](./016-market-sessions-fix-and-widget-layout.md) | Done |
 
 **Recommended order:** 000 → 001 → 002 → 003 (the two small filters first, so the
 large `page.tsx` refactor in 003 lands last and doesn't conflict).

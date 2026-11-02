@@ -54,7 +54,7 @@ React/Next.js stack. No API keys, no paid feeds — every data source is free an
 - **Exchange comparison** — per-venue price, aggregated mid, and spread across Binance, Coinbase, OKX, and Bybit.
 - **Market sentiment** — Fear & Greed gauge, funding rates, 8h funding settlement countdown, annualized APR, open interest, and Global Long/Short account ratio.
 - **Economic Calendar** — macroeconomic events with high/medium impact toggle, dynamic currency filtering, previous/forecast/actual prints, and importance dots.
-- **Market Sessions** — Forex Factory-style 24-hour visual horizontal timeline showing global trading hours (Sydney, Tokyo, London, New York) with live NOW beacon line, automatic IANA timezone conversion, DST adjustment, and Equities (Cash Bell) vs Forex modes.
+- **Market Sessions** — Forex Factory-style 24-hour visual horizontal timeline showing global trading hours (Sydney, Tokyo, London, New York) with live NOW beacon line, automatic two-pass IANA timezone conversion, wrap-around segments, DST adjustment, TSE lunch break, UTC offset display, and Equities (Cash Bell) vs Forex modes.
 - **News** — multi-source headlines (CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC) with bull/bear sentiment filter, asset tagging, and a 1-click active-symbol filter.
 
 ### Alerts & theming
@@ -151,7 +151,8 @@ State is kept in `localStorage` under these keys:
 
 `btc-terminal:theme`, `btc-terminal:themes`, `btc-terminal:alerts`,
 `btc-terminal:alert-prefs`, `btc-terminal:panel-order`, `btc-terminal:drawings`,
-`btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`
+`btc-terminal:chart-type`, `btc-terminal:session-hl`, `btc-terminal:calendar-filters`,
+`btc-terminal:sessions-prefs`
 (plus opt-in read-only `btc-terminal:debug-renders`)
 
 ## Known limitations
