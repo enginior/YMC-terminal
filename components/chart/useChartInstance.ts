@@ -62,7 +62,7 @@ export function useChartInstance({
   /* ---------------- chart lifecycle ---------------- */
 
   useEffect(() => {
-    if (!containerRef.current || candles.length === 0 || chartRef.current) return;
+    if (!containerRef.current) return;
 
     const container = containerRef.current;
     const chart = createChart(container, {
@@ -121,11 +121,13 @@ export function useChartInstance({
     setChartEpoch((e) => e + 1);
 
     const resize = () => {
-      if (!containerRef.current) return;
-      chart.applyOptions({
-        width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight,
-      });
+      if (!containerRef.current || chartRef.current !== chart) return;
+      try {
+        chart.applyOptions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      } catch {}
     };
     window.addEventListener("resize", resize);
 
@@ -141,32 +143,120 @@ export function useChartInstance({
     return () => {
       window.removeEventListener("resize", resize);
       ro?.disconnect();
-      chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       lineSeriesRef.current = null;
       dayLinesRef.current = null;
       sessionLinesRef.current = [];
+      try {
+        chart.remove();
+      } catch {}
     };
     // Recreated only when the theme changes; data flows through the effects below
-  }, [candles.length > 0, theme]);
+  }, [theme]);
 
   /* ---------------- price + volume data ---------------- */
 
-  // fitContent() runs once when the chart is built. Switching symbol or timeframe
-  // replaces every timestamp with a different range, so the old viewport can end
-  // up over a stretch that holds no data. Flag a refit and apply it once the new candles arrive.
+  // Zoom to the most recent ~45 candles on initial load or when symbol/timeframe changes,
+  // and use O(1) series.update() for live intrabar WebSocket ticks instead of rebuilding 8,000+ bars.
   const pendingRefitRef = useRef(true);
+  const datasetMetaRef = useRef<{
+    symbol: string;
+    timeframe: string;
+    chartType: ChartType;
+    theme: Theme;
+    firstTime: number;
+    secondLastTime: number;
+    length: number;
+  } | null>(null);
 
   useEffect(() => {
     pendingRefitRef.current = true;
+    datasetMetaRef.current = null;
   }, [symbol, timeframe]);
 
   useEffect(() => {
-    if (!candleSeriesRef.current || candles.length === 0) return;
+    if (!candleSeriesRef.current) return;
+    if (candles.length === 0) {
+      try {
+        candleSeriesRef.current.setData([]);
+        lineSeriesRef.current?.setData([]);
+        volumeSeriesRef.current?.setData([]);
+      } catch {}
+      datasetMetaRef.current = null;
+      return;
+    }
+
+    const firstTime = candles[0].time;
+    const secondLastTime = candles.length >= 2 ? candles[candles.length - 2].time : firstTime;
+    const prevMeta = datasetMetaRef.current;
+
+    const wasTiny = prevMeta !== null && prevMeta.length <= 2 && candles.length > 2;
+    if (wasTiny) {
+      pendingRefitRef.current = true;
+    }
+
+    const isIncrementalTick =
+      !pendingRefitRef.current &&
+      prevMeta !== null &&
+      prevMeta.symbol === symbol &&
+      prevMeta.timeframe === timeframe &&
+      prevMeta.chartType === chartType &&
+      prevMeta.theme === theme &&
+      prevMeta.firstTime === firstTime &&
+      (candles.length === prevMeta.length || candles.length === prevMeta.length + 1) &&
+      (candles.length < 2 || prevMeta.secondLastTime === secondLastTime);
 
     try {
+      if (isIncrementalTick) {
+        const lastRaw = candles[candles.length - 1];
+        const lastDisplay = chartCandles[chartCandles.length - 1];
+        if (chartType === "line") {
+          candleSeriesRef.current.update({
+            time: lastRaw.time as UTCTimestamp,
+            open: lastRaw.open,
+            high: lastRaw.high,
+            low: lastRaw.low,
+            close: lastRaw.close,
+          });
+          lineSeriesRef.current?.update({
+            time: lastRaw.time as UTCTimestamp,
+            value: lastRaw.close,
+          });
+        } else {
+          candleSeriesRef.current.update({
+            time: lastDisplay.time as UTCTimestamp,
+            open: lastDisplay.open,
+            high: lastDisplay.high,
+            low: lastDisplay.low,
+            close: lastDisplay.close,
+          });
+        }
+
+        if (volumeSeriesRef.current) {
+          volumeSeriesRef.current.update({
+            time: lastDisplay.time as UTCTimestamp,
+            value: lastDisplay.volume || 0,
+            color:
+              lastDisplay.close >= lastDisplay.open
+                ? `${theme.upCandle}55`
+                : `${theme.downCandle}55`,
+          });
+        }
+
+        datasetMetaRef.current = {
+          symbol,
+          timeframe,
+          chartType,
+          theme,
+          firstTime,
+          secondLastTime,
+          length: candles.length,
+        };
+        return;
+      }
+
       if (chartType === "line") {
         candleSeriesRef.current.setData(
           candles.map((c) => ({
@@ -208,19 +298,35 @@ export function useChartInstance({
         );
       }
 
+      datasetMetaRef.current = {
+        symbol,
+        timeframe,
+        chartType,
+        theme,
+        firstTime,
+        secondLastTime,
+        length: candles.length,
+      };
+
       if (pendingRefitRef.current) {
-        pendingRefitRef.current = false;
+        if (candles.length > 2) {
+          pendingRefitRef.current = false;
+        }
         try {
-          // Re-arm the price scale too: dragging the price axis switches it to
-          // manual mode, and setData won't re-fit it.
+          // Re-arm the price scale and zoom into the most recent 45 candles (instead of cramming 8,000+ bars)
           chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
-          chartRef.current?.timeScale().fitContent();
+          const total = candles.length;
+          const visibleBars = Math.min(total, 45);
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, total - visibleBars),
+            to: total + 4,
+          });
         } catch {}
       }
     } catch {
       /* series disposed during a theme swap — next effect run repairs it */
     }
-  }, [candles, chartCandles, chartType, theme]);
+  }, [candles, chartCandles, chartType, theme, symbol, timeframe]);
 
   // Toggle line series visibility in line mode
   useEffect(() => {
@@ -271,7 +377,10 @@ export function useChartInstance({
     } catch {}
   }, [showVolume]);
 
-  // UTC day separators. Recomputed from the candle set and re-coloured on theme change.
+  // UTC day separators. Recomputed only when the candle bar timestamps, toggle, or theme change.
+  const firstCandleTime = candles[0]?.time ?? 0;
+  const lastCandleTime = candles[candles.length - 1]?.time ?? 0;
+
   useEffect(() => {
     const prim = dayLinesRef.current;
     if (!prim) return;
@@ -281,7 +390,8 @@ export function useChartInstance({
         : [],
       theme.dim
     );
-  }, [candles, showDayLines, theme]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles.length, firstCandleTime, lastCandleTime, showDayLines, theme]);
 
   // 24H & Previous Day High / Low watermark lines
   useEffect(() => {
@@ -335,61 +445,63 @@ export function useChartInstance({
 
     const lines: IPriceLine[] = [];
 
-    if (hi24 != null && Number.isFinite(hi24)) {
-      lines.push(
-        targetSeries.createPriceLine({
-          price: hi24,
-          color: theme.green,
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          lineVisible: true,
-          axisLabelVisible: true,
-          title: "24H HI",
-        })
-      );
-    }
+    try {
+      if (hi24 != null && Number.isFinite(hi24)) {
+        lines.push(
+          targetSeries.createPriceLine({
+            price: hi24,
+            color: theme.green,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            lineVisible: true,
+            axisLabelVisible: true,
+            title: "24H HI",
+          })
+        );
+      }
 
-    if (lo24 != null && Number.isFinite(lo24)) {
-      lines.push(
-        targetSeries.createPriceLine({
-          price: lo24,
-          color: theme.red,
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          lineVisible: true,
-          axisLabelVisible: true,
-          title: "24H LO",
-        })
-      );
-    }
+      if (lo24 != null && Number.isFinite(lo24)) {
+        lines.push(
+          targetSeries.createPriceLine({
+            price: lo24,
+            color: theme.red,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            lineVisible: true,
+            axisLabelVisible: true,
+            title: "24H LO",
+          })
+        );
+      }
 
-    if (prevHi != null && Number.isFinite(prevHi)) {
-      lines.push(
-        targetSeries.createPriceLine({
-          price: prevHi,
-          color: "#38BDF8",
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          lineVisible: true,
-          axisLabelVisible: true,
-          title: "PREV HI",
-        })
-      );
-    }
+      if (prevHi != null && Number.isFinite(prevHi)) {
+        lines.push(
+          targetSeries.createPriceLine({
+            price: prevHi,
+            color: "#38BDF8",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: true,
+            title: "PREV HI",
+          })
+        );
+      }
 
-    if (prevLo != null && Number.isFinite(prevLo)) {
-      lines.push(
-        targetSeries.createPriceLine({
-          price: prevLo,
-          color: "#F59E0B",
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          lineVisible: true,
-          axisLabelVisible: true,
-          title: "PREV LO",
-        })
-      );
-    }
+      if (prevLo != null && Number.isFinite(prevLo)) {
+        lines.push(
+          targetSeries.createPriceLine({
+            price: prevLo,
+            color: "#F59E0B",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: true,
+            title: "PREV LO",
+          })
+        );
+      }
+    } catch {}
 
     sessionLinesRef.current = lines;
 

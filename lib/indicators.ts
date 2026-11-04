@@ -244,3 +244,57 @@ export function cvd(data: Candle[]): (number | null)[] {
   }
   return result;
 }
+
+/**
+ * Average True Range (ATR) using Wilder's smoothing (default period = 14).
+ */
+export function atr(data: Candle[], period: number = 14): (number | null)[] {
+  const result: (number | null)[] = [];
+  const trs: number[] = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const c = data[i];
+    const tr =
+      i === 0
+        ? c.high - c.low
+        : Math.max(
+            c.high - c.low,
+            Math.abs(c.high - data[i - 1].close),
+            Math.abs(c.low - data[i - 1].close)
+          );
+    trs.push(tr);
+
+    if (i < period - 1) {
+      result.push(null);
+    } else if (i === period - 1) {
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += trs[j];
+      result.push(sum / period);
+    } else {
+      const prev = result[i - 1]!;
+      result.push((prev * (period - 1) + tr) / period);
+    }
+  }
+  return result;
+}
+
+/**
+ * Relative Volume (RVOL) — ratio of current bar volume to N-bar average volume.
+ */
+export function rvol(data: Candle[], period: number = 20): (number | null)[] {
+  const result: (number | null)[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push(null);
+      continue;
+    }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      sum += data[j].volume;
+    }
+    const avg = sum / period;
+    result.push(avg > 0 ? data[i].volume / avg : 1);
+  }
+  return result;
+}
+

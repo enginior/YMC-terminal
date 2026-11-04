@@ -124,35 +124,33 @@ export function useLiquidationMarkers({
     return buildLiquidationMarkers(liquidations, candles, symbol, minThreshold, theme);
   }, [liquidations, candles, symbol, minThreshold, theme, showLiquidations]);
 
-  // Create plugin instance when series/chart is created
+  // Create plugin instance when series/chart is created and liquidations are enabled
   useEffect(() => {
     const series = candleSeriesRef.current;
-    if (!series) return;
+    if (!series || !showLiquidations) return;
 
     try {
       const plugin = createSeriesMarkers(series as any);
       markersPluginRef.current = plugin as any;
-    } catch (err) {
-      console.error("Failed to create series markers plugin:", err);
-    }
+    } catch {}
 
     return () => {
-      try {
-        markersPluginRef.current?.detach();
-      } catch {}
+      if (candleSeriesRef.current === series) {
+        try {
+          markersPluginRef.current?.detach();
+        } catch {}
+      }
       markersPluginRef.current = null;
     };
-  }, [chartEpoch, candleSeriesRef]);
+  }, [chartEpoch, candleSeriesRef, showLiquidations]);
 
   // Push markers to plugin
   useEffect(() => {
     const plugin = markersPluginRef.current;
-    if (!plugin) return;
+    if (!plugin || !candleSeriesRef.current) return;
 
     try {
       plugin.setMarkers(showLiquidations ? markers : []);
-    } catch (err) {
-      console.error("Failed to set series markers:", err);
-    }
-  }, [markers, showLiquidations]);
+    } catch {}
+  }, [markers, showLiquidations, candleSeriesRef]);
 }

@@ -290,4 +290,36 @@ describe("drawings geometry and hit testing", () => {
     expect(hitTestAnchor(lockedTrend, { x: 100, y: 400 }, mockChart, mockSeries)).toBeNull();
     expect(hitTestAnchor(lockedTrend, { x: 300, y: 250 }, mockChart, mockSeries)).toBeNull();
   });
+
+  it("rejects cross-symbol contaminated drawings whose price is wildly out of scale for the active asset", () => {
+    const goldCandles = [
+      { time: 1100, close: 2680 },
+      { time: 1200, close: 2700 },
+    ];
+
+    const btcSetupOnGold: Drawing = {
+      id: "setup-btc-leak",
+      tool: "long",
+      time1: 1100,
+      price1: 85000,
+      time2: 1200,
+      price2: 87000,
+      stopPrice: 84000,
+      color: "#22c55e",
+    };
+
+    const validGoldSetup: Drawing = {
+      id: "setup-gold-valid",
+      tool: "long",
+      time1: 1100,
+      price1: 2700,
+      time2: 1200,
+      price2: 2740,
+      stopPrice: 2680,
+      color: "#22c55e",
+    };
+
+    expect(drawingGeometry(btcSetupOnGold, mockChart, mockSeries, goldCandles)).toBeNull();
+    expect(drawingGeometry(validGoldSetup, mockChart, mockSeries, goldCandles)).not.toBeNull();
+  });
 });

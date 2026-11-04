@@ -5,6 +5,8 @@ import { Candle, Trade, OrderBookEntry, LiquidationOrder } from "@/lib/types";
 
 export type { LiquidationOrder } from "@/lib/types";
 
+export type ExchangeSource = "binance" | "bybit";
+
 export interface ExchangeData {
   name: string;
   price: number;
@@ -15,13 +17,14 @@ export interface ExchangeData {
 export interface MarketState {
   symbol: string;
   interval: string;
+  exchangeSource: ExchangeSource;
   venues: ExchangeData[];
   aggregatedPrice: number;
   trades: Trade[];
   orderBook: { bids: OrderBookEntry[]; asks: OrderBookEntry[] };
   candles: Candle[];
   candleError: boolean;
-  price: number; // 1 Hz snapshot of aggregatedPrice
+  price: number; // Unified live price from active exchange source
   direction: "up" | "down";
   connected: boolean;
   exchangeCount: number;
@@ -32,6 +35,7 @@ export interface MarketState {
 export const INITIAL_MARKET_STATE: MarketState = {
   symbol: "",
   interval: "",
+  exchangeSource: "binance",
   venues: [
     { name: "Binance", price: 0, connected: false, lastUpdate: 0 },
     { name: "Coinbase", price: 0, connected: false, lastUpdate: 0 },
@@ -119,11 +123,12 @@ export const marketStore = {
     };
   },
 
-  reset(symbol: string, interval: string): void {
+  reset(symbol: string, interval: string, exchangeSource?: ExchangeSource): void {
     state = {
       ...INITIAL_MARKET_STATE,
       symbol,
       interval,
+      exchangeSource: exchangeSource ?? state.exchangeSource,
       tickers: state.tickers,
       liquidations: state.liquidations,
       venues: [

@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { useMarket } from "@/lib/marketStore";
+import { toBinanceSymbol } from "@/lib/symbols";
+import { Candle } from "@/lib/types";
 import { heikenAshi } from "@/lib/heikenAshi";
+
+const EMPTY_CANDLES: Candle[] = [];
 import {
   PriceChartProps,
   ChartType,
@@ -17,6 +21,7 @@ import { useChartInstance } from "./chart/useChartInstance";
 import { useIndicatorPanes } from "./chart/useIndicatorPanes";
 import { useDrawings } from "./chart/useDrawings";
 import { useLiquidationMarkers } from "./chart/useLiquidationMarkers";
+import { useStrategyMarkers } from "./chart/useStrategyMarkers";
 
 export type { ChartType, PriceChartProps } from "./chart/types";
 
@@ -32,10 +37,21 @@ function PriceChart({
   onOpenSymbolSearch,
 }: PriceChartProps) {
   const { theme } = useTheme();
+  const storeSymbol = useMarket((s) => s.symbol);
+  const storeInterval = useMarket((s) => s.interval);
   const storeCandles = useMarket((s) => s.candles);
   const storeCandleError = useMarket((s) => s.candleError);
-  const candles = propCandles ?? storeCandles;
-  const candleError = propCandleError ?? storeCandleError;
+
+  // Prevent stale storeCandles from the previous symbol/timeframe from leaking into
+  // child chart hooks before Home's useMarketFeed effect resets marketStore.
+  const expectedStoreSymbol = toBinanceSymbol(symbol) ?? symbol;
+  const isStoreMatched =
+    !storeSymbol ||
+    (storeSymbol.toUpperCase() === expectedStoreSymbol.toUpperCase() &&
+      (!storeInterval || storeInterval === timeframe));
+
+  const candles = propCandles ?? (isStoreMatched ? storeCandles : EMPTY_CANDLES);
+  const candleError = propCandleError ?? (isStoreMatched ? storeCandleError : false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [chartType, setChartType] = useState<ChartType>("candles");
@@ -172,6 +188,16 @@ function PriceChart({
     theme,
     showLiquidations,
     minThreshold: liquidationThreshold,
+    chartEpoch,
+  });
+
+  // Live Pine-style strategy buy/sell signal arrows toggled from DayTraderPanel
+  useStrategyMarkers({
+    candleSeriesRef,
+    candles,
+    symbol,
+    timeframe,
+    theme,
     chartEpoch,
   });
 

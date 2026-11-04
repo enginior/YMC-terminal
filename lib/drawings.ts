@@ -37,6 +37,10 @@ export interface Drawing {
   lineWidth?: number; // 1, 2, 3 (default 1.5)
   lineStyle?: LineStylePattern; // default "solid"
   locked?: boolean;
+  /** Optional custom stop-loss price for long/short position boxes (defaults to 1:2 R:R if omitted). */
+  stopPrice?: number;
+  /** Optional badge/strategy label for plotted setups. */
+  label?: string;
 }
 
 export interface PersistedDrawingsData {
@@ -140,75 +144,88 @@ export function drawingGeometry(
   d: Drawing,
   chart: IChartApi,
   series: ISeriesApi<"Candlestick">,
-  candles?: { time: number }[]
+  candles?: { time: number; close?: number }[]
 ): DrawingGeometry | null {
-  const timeScale = chart.timeScale();
-  const w = timeScale.width();
+  try {
+    // Guard against cross-symbol price mismatch (e.g. a $85,000 BTC setup on a $2,700 Gold chart)
+    if (candles && candles.length > 0) {
+      const refClose = candles[candles.length - 1]?.close;
+      if (typeof refClose === "number" && refClose > 0 && d.price1 > 0) {
+        const ratio = d.price1 / refClose;
+        if (ratio > 4 || ratio < 0.25) return null;
+      }
+    }
 
-  if (d.tool === "level") {
-    const y = series.priceToCoordinate(d.price1);
-    if (y === null) return null;
-    return { kind: "level", points: [{ x: 0, y }, { x: w, y }] };
-  }
+    const timeScale = chart.timeScale();
+    const w = timeScale.width();
 
-  const x1 = timeToCoordinateExtrapolated(d.time1, timeScale, candles);
-  const y1 = series.priceToCoordinate(d.price1);
-  if (x1 === null || y1 === null) return null;
+    if (d.tool === "level") {
+      const y = series.priceToCoordinate(d.price1);
+      if (y === null) return null;
+      return { kind: "level", points: [{ x: 0, y }, { x: w, y }] };
+    }
 
-  if (d.tool === "hray") {
-    return {
-      kind: "hray",
-      points: [{ x: x1, y: y1 }, { x: Math.max(x1, w), y: y1 }],
-    };
-  }
+    const x1 = timeToCoordinateExtrapolated(d.time1, timeScale, candles);
+    const y1 = series.priceToCoordinate(d.price1);
+    if (x1 === null || y1 === null) return null;
 
-  const x2 = timeToCoordinateExtrapolated(d.time2, timeScale, candles);
-  const y2 = series.priceToCoordinate(d.price2);
-  if (x2 === null || y2 === null) return null;
+    if (d.tool === "hray") {
+      return {
+        kind: "hray",
+        points: [{ x: x1, y: y1 }, { x: Math.max(x1, w), y: y1 }],
+      };
+    }
 
-  if (d.tool === "ray") {
-    if (Math.abs(x2 - x1) < 0.001) {
-      const endY = y2 >= y1 ? 10000 : -10000;
+    const x2 = timeToCoordinateExtrapolated(d.time2, timeScale, candles);
+    const y2 = series.priceToCoordinate(d.price2);
+    if (x2 === null || y2 === null) return null;
+
+    if (d.tool === "ray") {
+      if (Math.abs(x2 - x1) < 0.001) {
+        const endY = y2 >= y1 ? 10000 : -10000;
+        return {
+          kind: "ray",
+          points: [{ x: x1, y: y1 }, { x: x1, y: endY }],
+          guide: { x: x2, y: y2 },
+        };
+      }
+      const t = x2 > x1 ? (w - x1) / (x2 - x1) : (0 - x1) / (x2 - x1);
+      const endX = x2 > x1 ? w : 0;
+      const endY = y1 + t * (y2 - y1);
       return {
         kind: "ray",
-        points: [{ x: x1, y: y1 }, { x: x1, y: endY }],
+        points: [{ x: x1, y: y1 }, { x: endX, y: endY }],
         guide: { x: x2, y: y2 },
       };
     }
-    const t = x2 > x1 ? (w - x1) / (x2 - x1) : (0 - x1) / (x2 - x1);
-    const endX = x2 > x1 ? w : 0;
-    const endY = y1 + t * (y2 - y1);
+
+    if (d.tool === "trend") {
+      return { kind: "segment", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+    }
+
+    if (d.tool === "arrow") {
+      return { kind: "arrow", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+    }
+
+    if (d.tool === "fib") {
+      return { kind: "fib", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+    }
+
+    if (d.tool === "channel") {
+      return { kind: "channel", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+    }
+
+    if (d.tool === "long" || d.tool === "short") {
+      return { kind: "position", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
+    }
+
     return {
-      kind: "ray",
-      points: [{ x: x1, y: y1 }, { x: endX, y: endY }],
-      guide: { x: x2, y: y2 },
+      kind: "rect",
+      points: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
     };
+  } catch {
+    return null;
   }
-
-  if (d.tool === "trend") {
-    return { kind: "segment", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
-  }
-
-  if (d.tool === "arrow") {
-    return { kind: "arrow", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
-  }
-
-  if (d.tool === "fib") {
-    return { kind: "fib", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
-  }
-
-  if (d.tool === "channel") {
-    return { kind: "channel", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
-  }
-
-  if (d.tool === "long" || d.tool === "short") {
-    return { kind: "position", points: [{ x: x1, y: y1 }, { x: x2, y: y2 }] };
-  }
-
-  return {
-    kind: "rect",
-    points: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
-  };
 }
 
 function distanceToSegment(p: Point, a: Point, b: Point): number {
@@ -284,7 +301,9 @@ export function hitTestDrawing(
     const entryY = a.y;
     const tpY = b.y;
     const slDist = Math.abs(tpY - entryY) / 2;
-    const slY = isLong ? entryY + slDist : entryY - slDist;
+    const customSlY =
+      typeof d.stopPrice === "number" ? series.priceToCoordinate(d.stopPrice) : null;
+    const slY = customSlY ?? (isLong ? entryY + slDist : entryY - slDist);
     const minY = Math.min(entryY, tpY, slY) - tolerance;
     const maxY = Math.max(entryY, tpY, slY) + tolerance;
     const minX = Math.min(a.x, b.x) - tolerance;
@@ -463,6 +482,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     const chart = this.chart;
     const series = this.series;
     if (!chart || !series) return;
+    if (this.candles.length === 0 && !this.draft) return;
 
     const items: Drawing[] = this.draft
       ? (this.hidden ? [this.draft] : [...this.drawings, this.draft])
@@ -655,13 +675,19 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
           const isLong = item.tool === "long";
           const entryPrice = item.price1;
           const tpPrice = isLong
-            ? Math.max(item.price1 * 1.001, item.price2)
-            : Math.min(item.price1 * 0.999, item.price2);
+            ? Math.max(item.price1 * 1.0005, item.price2)
+            : Math.min(item.price1 * 0.9995, item.price2);
           const targetGain = Math.abs(tpPrice - entryPrice);
           const targetPct = (targetGain / entryPrice) * 100;
-          const stopLoss = targetGain / 2; // Default 1:2 R:R
-          const slPrice = isLong ? entryPrice - stopLoss : entryPrice + stopLoss;
+          const slPrice =
+            typeof item.stopPrice === "number"
+              ? item.stopPrice
+              : isLong
+                ? entryPrice - targetGain / 2
+                : entryPrice + targetGain / 2;
+          const stopLoss = Math.max(0.01, Math.abs(entryPrice - slPrice));
           const slPct = (stopLoss / entryPrice) * 100;
+          const rrRatio = targetGain / stopLoss;
 
           const minX = Math.min(px(a.x), px(b.x));
           const boxW = Math.max(90 * hx, Math.abs(px(b.x) - px(a.x)));
@@ -689,7 +715,11 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
             minX + 6 * hx,
             tpBoxY + 10 * vy
           );
-          context.fillText(`R:R 2.00`, minX + 6 * hx, tpBoxY + 22 * vy);
+          context.fillText(
+            `R:R ${rrRatio.toFixed(2)}${item.label ? ` • ${item.label}` : ""}`,
+            minX + 6 * hx,
+            tpBoxY + 22 * vy
+          );
 
           // 2. Red Stop Loss Region
           const slBoxY = Math.min(yEntry, ySL);
@@ -707,7 +737,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
             minX + 6 * hx,
             slBoxY + 10 * vy
           );
-          context.fillText(`Liq (20x): ~4.5%`, minX + 6 * hx, slBoxY + 22 * vy);
+          context.fillText(`Stop @ $${slPrice.toFixed(2)}`, minX + 6 * hx, slBoxY + 22 * vy);
 
           // 3. Entry divider line
           context.strokeStyle = "#ffffff";

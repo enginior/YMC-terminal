@@ -10,17 +10,18 @@ import MarketStats, { TickerStats } from "@/components/MarketStats";
 import SettingsPanel from "@/components/SettingsPanel";
 import AlertsPanel from "@/components/AlertsPanel";
 import AlertNotification from "@/components/AlertNotification";
-import ExchangePanel from "@/components/ExchangePanel";
 import MarketHeatmapPanel from "@/components/MarketHeatmapPanel";
 import EconomicCalendarPanel from "@/components/EconomicCalendarPanel";
 import MarketSessionsPanel from "@/components/MarketSessionsPanel";
 import NewsFeedPanel from "@/components/NewsFeedPanel";
 import MarketSentimentPanel from "@/components/MarketSentimentPanel";
+import DayTraderPanel from "@/components/DayTraderPanel";
 import HotkeysModal from "@/components/HotkeysModal";
 import SymbolSearchModal from "@/components/SymbolSearchModal";
 import Panel from "@/components/Panel";
 import { useTheme, THEME_PRESETS } from "@/context/ThemeContext";
 import { useMarketFeed } from "@/hooks/useMultiExchangeData";
+import { ExchangeSource } from "@/lib/marketStore";
 import { useAlerts } from "@/hooks/useAlerts";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useRenderCount } from "@/lib/devRenderCount";
@@ -29,11 +30,11 @@ import { toBinanceSymbol, resolvePrefix, UNIVERSE } from "@/lib/symbols";
 const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
 
 const DEFAULT_ORDER = [
+  "trader",
   "orderbook",
   "tradetape",
   "alerts",
   "sentiment",
-  "exchange",
   "sessions",
   "news",
 ] as const;
@@ -41,6 +42,8 @@ const DEFAULT_ORDER = [
 type PanelId = (typeof DEFAULT_ORDER)[number];
 
 const ORDER_KEY = "btc-terminal:panel-order";
+const LEFT_RAIL_KEY = "btc-terminal:left-rail";
+const EXCHANGE_SOURCE_KEY = "btc-terminal:exchange-source";
 
 /** Which chart symbol each watchlist row maps to. */
 function toChartSymbol(label: string): string | null {
@@ -74,6 +77,10 @@ export default function Home() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [maximizedPanel, setMaximizedPanel] = useState<string | null>(null);
+  const [showLeftRail, setShowLeftRail] = useState(true);
+  const skipLeftRailSaveRef = useRef(true);
+  const [exchangeSource, setExchangeSource] = useState<ExchangeSource>("binance");
+  const skipExchangeSourceSaveRef = useRef(true);
   const [ticker, setTicker] = useState<TickerStats | null>(null);
   const [panelOrder, setPanelOrder] = useState<PanelId[]>([...DEFAULT_ORDER]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -113,6 +120,13 @@ export default function Home() {
       if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         setMaximizedPanel((prev) => (prev ? null : "chart"));
+        return;
+      }
+
+      // b key toggles left panel rail (Watchlist + Calendar + Heatmap)
+      if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        setShowLeftRail((prev) => !prev);
         return;
       }
 
@@ -166,7 +180,37 @@ export default function Home() {
   useEffect(() => {
     setPanelOrder(loadOrder());
     orderHydrated.current = true;
+    try {
+      const savedLeft = window.localStorage.getItem(LEFT_RAIL_KEY);
+      if (savedLeft !== null) {
+        setShowLeftRail(savedLeft === "true");
+      }
+      const savedSource = window.localStorage.getItem(EXCHANGE_SOURCE_KEY);
+      if (savedSource === "binance" || savedSource === "bybit") {
+        setExchangeSource(savedSource);
+      }
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    if (skipLeftRailSaveRef.current) {
+      skipLeftRailSaveRef.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(LEFT_RAIL_KEY, String(showLeftRail));
+    } catch {}
+  }, [showLeftRail]);
+
+  useEffect(() => {
+    if (skipExchangeSourceSaveRef.current) {
+      skipExchangeSourceSaveRef.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(EXCHANGE_SOURCE_KEY, exchangeSource);
+    } catch {}
+  }, [exchangeSource]);
 
   useEffect(() => {
     if (!orderHydrated.current) return;
@@ -180,7 +224,7 @@ export default function Home() {
   const binanceSymbol = toChartSymbol(selectedSymbol) ?? "BTCUSDT";
 
   // Stream data into marketStore outside React state (render isolation)
-  useMarketFeed(binanceSymbol, timeframe);
+  useMarketFeed(binanceSymbol, timeframe, exchangeSource);
 
   const {
     alerts,
@@ -194,17 +238,17 @@ export default function Home() {
     requestDesktopNotification,
   } = useAlerts();
 
-  // Real 24hr stats from Binance (throttled when tab is backgrounded)
+  // Real 24hr stats from the unified exchange source (throttled when tab is backgrounded)
   const fetchTicker = useCallback(async () => {
     try {
-      const res = await fetch(`/api/ticker?symbol=${binanceSymbol}`);
+      const res = await fetch(`/api/ticker?symbol=${binanceSymbol}&source=${exchangeSource}`);
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       if (json.lastPrice) setTicker(json);
     } catch {
       /* keep previous values rather than blanking the strip */
     }
-  }, [binanceSymbol]);
+  }, [binanceSymbol, exchangeSource]);
 
   useVisibilityPolling(fetchTicker, 10000);
 
@@ -227,8 +271,8 @@ export default function Home() {
     const index = panelOrder.indexOf(id);
     // `key` is passed explicitly by the caller — spreading it triggers a React warning
     const props = {
-      height: id === "news" ? 300 : id === "sessions" ? 200 : 200,
-      span: (id === "news" || id === "sessions" ? 2 : 1) as 1 | 2,
+      height: id === "trader" ? 310 : id === "news" ? 300 : id === "sessions" ? 200 : 200,
+      span: (id === "trader" || id === "news" || id === "sessions" ? 2 : 1) as 1 | 2,
       onDragStart: () => handleDragStart(index),
       onDragOver: noDragOver,
       onDrop: () => handleDrop(index),
@@ -239,6 +283,17 @@ export default function Home() {
 
     let body: React.ReactNode;
     switch (id) {
+      case "trader":
+        body = (
+          <DayTraderPanel
+            symbol={selectedSymbol}
+            timeframe={timeframe}
+            onSelectSymbol={setSelectedSymbol}
+            onSelectTimeframe={setTimeframe}
+            onAddAlert={addAlert}
+          />
+        );
+        break;
       case "orderbook":
         body = <OrderBook />;
         break;
@@ -261,9 +316,6 @@ export default function Home() {
         break;
       case "sentiment":
         body = <MarketSentimentPanel symbol={selectedSymbol} />;
-        break;
-      case "exchange":
-        body = <ExchangePanel />;
         break;
       case "sessions":
         body = <MarketSessionsPanel />;
@@ -296,6 +348,16 @@ export default function Home() {
             onOpenSymbolSearch={() => setShowSymbolSearch(true)}
           />
         );
+      case "trader":
+        return (
+          <DayTraderPanel
+            symbol={selectedSymbol}
+            timeframe={timeframe}
+            onSelectSymbol={setSelectedSymbol}
+            onSelectTimeframe={setTimeframe}
+            onAddAlert={addAlert}
+          />
+        );
       case "orderbook":
         return <OrderBook />;
       case "tradetape":
@@ -315,8 +377,6 @@ export default function Home() {
         );
       case "sentiment":
         return <MarketSentimentPanel symbol={selectedSymbol} />;
-      case "exchange":
-        return <ExchangePanel />;
       case "sessions":
         return <MarketSessionsPanel />;
       case "news":
@@ -345,6 +405,26 @@ export default function Home() {
 
     if (upper === "FULL" || upper === "MAX" || upper === "MAX CHART") {
       setMaximizedPanel("chart");
+      return;
+    }
+
+    if (upper === "TRADER" || upper === "MAX TRADER" || upper === "SCANNER" || upper === "TIMEMACHINE") {
+      setMaximizedPanel("trader");
+      return;
+    }
+
+    if (upper === "LEFT" || upper === "SIDEBAR" || upper === "TOGGLE LEFT") {
+      setShowLeftRail((prev) => !prev);
+      return;
+    }
+
+    if (upper === "BINANCE" || upper === "SOURCE BINANCE") {
+      setExchangeSource("binance");
+      return;
+    }
+
+    if (upper === "BYBIT" || upper === "SOURCE BYBIT") {
+      setExchangeSource("bybit");
       return;
     }
 
@@ -412,6 +492,8 @@ export default function Home() {
             <MarketStats
               symbol={selectedSymbol}
               ticker={ticker}
+              exchangeSource={exchangeSource}
+              onChangeExchangeSource={setExchangeSource}
             />
           </div>
 
@@ -422,6 +504,16 @@ export default function Home() {
               onTimeframeChange={setTimeframe}
               ticker={ticker}
               onOpenSymbolSearch={() => setShowSymbolSearch(true)}
+            />
+          </div>
+
+          <div style={{ background: theme.panel, height: 360 }}>
+            <DayTraderPanel
+              symbol={selectedSymbol}
+              timeframe={timeframe}
+              onSelectSymbol={setSelectedSymbol}
+              onSelectTimeframe={setTimeframe}
+              onAddAlert={addAlert}
             />
           </div>
 
@@ -439,10 +531,6 @@ export default function Home() {
 
           <div style={{ background: theme.panel, height: 260 }}>
             <MarketSentimentPanel symbol={selectedSymbol} />
-          </div>
-
-          <div style={{ background: theme.panel, height: 340 }}>
-            <ExchangePanel />
           </div>
 
           <div style={{ background: theme.panel, height: 320 }}>
@@ -490,6 +578,20 @@ export default function Home() {
     );
   }
 
+  const isRightWidgetExpanded =
+    maximizedPanel !== null && DEFAULT_ORDER.includes(maximizedPanel as PanelId);
+  const isFullScreenMaximized = maximizedPanel !== null && !isRightWidgetExpanded;
+
+  const marketStatsSpan = showLeftRail ? "col-span-10" : "col-span-12";
+  const chartColSpan = isRightWidgetExpanded
+    ? showLeftRail
+      ? "col-span-4"
+      : "col-span-6"
+    : showLeftRail
+      ? "col-span-7"
+      : "col-span-9";
+  const rightColSpan = isRightWidgetExpanded ? "col-span-6" : "col-span-3";
+
   return (
     <div className="app-scale flex flex-col overflow-hidden" style={{ background: theme.bg }}>
       <CommandBar
@@ -499,9 +601,11 @@ export default function Home() {
         onOpenSettings={() => setShowSettings(true)}
         onOpenShortcuts={() => setShowShortcuts(true)}
         onOpenSymbolSearch={() => setShowSymbolSearch(true)}
+        showLeftRail={showLeftRail}
+        onToggleLeftRail={() => setShowLeftRail((prev) => !prev)}
       />
 
-      {maximizedPanel ? (
+      {isFullScreenMaximized ? (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ background: theme.panel }}>
           <div
             className="h-7 px-3 flex items-center justify-between border-b shrink-0 text-[10px]"
@@ -530,32 +634,36 @@ export default function Home() {
           className="flex-1 grid grid-cols-12 gap-px p-px overflow-hidden min-h-0"
           style={{ background: theme.border, gridTemplateRows: "auto minmax(0, 1fr)" }}
         >
-          {/* Left rail: watchlist over economic calendar over market heatmap */}
-          <div
-            className="col-span-2 overflow-hidden flex flex-col min-h-0"
-            style={{ background: theme.panel, gridRow: "1 / -1" }}
-          >
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <Watchlist selected={selectedSymbol} onSelect={setSelectedSymbol} />
+          {/* Left rail: watchlist over economic calendar over market heatmap (collapsible) */}
+          {showLeftRail && (
+            <div
+              className="col-span-2 overflow-hidden flex flex-col min-h-0"
+              style={{ background: theme.panel, gridRow: "1 / -1" }}
+            >
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <Watchlist selected={selectedSymbol} onSelect={setSelectedSymbol} />
+              </div>
+              <div className="h-px shrink-0" style={{ background: theme.border }} />
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <EconomicCalendarPanel />
+              </div>
+              <div className="h-px shrink-0" style={{ background: theme.border }} />
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <MarketHeatmapPanel onSelect={setSelectedSymbol} selected={selectedSymbol} />
+              </div>
             </div>
-            <div className="h-px shrink-0" style={{ background: theme.border }} />
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <EconomicCalendarPanel />
-            </div>
-            <div className="h-px shrink-0" style={{ background: theme.border }} />
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <MarketHeatmapPanel onSelect={setSelectedSymbol} selected={selectedSymbol} />
-            </div>
-          </div>
+          )}
 
-          <div className="col-span-10 shrink-0" style={{ background: theme.panel }}>
+          <div className={`${marketStatsSpan} shrink-0`} style={{ background: theme.panel }}>
             <MarketStats
               symbol={selectedSymbol}
               ticker={ticker}
+              exchangeSource={exchangeSource}
+              onChangeExchangeSource={setExchangeSource}
             />
           </div>
 
-          <div className="col-span-7 overflow-hidden min-h-0" style={{ background: theme.panel }}>
+          <div className={`${chartColSpan} overflow-hidden min-h-0`} style={{ background: theme.panel }}>
             <PriceChart
               symbol={selectedSymbol}
               timeframe={timeframe}
@@ -567,11 +675,40 @@ export default function Home() {
             />
           </div>
 
-          <div className="col-span-3 overflow-y-auto min-h-0" style={{ background: theme.panel }}>
-            <div className="grid grid-cols-2 gap-px" style={{ background: theme.border, gridAutoFlow: "row dense" }}>
-              {panelOrder.map(renderPanel)}
+          {isRightWidgetExpanded && maximizedPanel ? (
+            <div
+              className={`${rightColSpan} flex flex-col min-h-0 overflow-hidden`}
+              style={{ background: theme.panel }}
+            >
+              <div
+                className="h-7 px-3 flex items-center justify-between border-b shrink-0 text-[10px]"
+                style={{ background: theme.bg, borderColor: theme.border }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold tracking-wider" style={{ color: theme.yellow }}>
+                    EXPANDED RIGHT PANEL: {maximizedPanel.toUpperCase()}
+                  </span>
+                  <span style={{ color: theme.dim }}>({selectedSymbol})</span>
+                </div>
+                <button
+                  onClick={() => setMaximizedPanel(null)}
+                  className="px-2 py-0.5 rounded border hover:opacity-80 font-mono text-[10px]"
+                  style={{ borderColor: theme.border, color: theme.text }}
+                >
+                  ✕ Restore Right Grid (Esc)
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {renderMaximizedContent(maximizedPanel)}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className={`${rightColSpan} overflow-y-auto min-h-0`} style={{ background: theme.panel }}>
+              <div className="grid grid-cols-2 gap-px" style={{ background: theme.border, gridAutoFlow: "row dense" }}>
+                {panelOrder.map(renderPanel)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -580,8 +717,13 @@ export default function Home() {
           onClose={() => setShowSettings(false)}
           onResetLayout={() => {
             setPanelOrder([...DEFAULT_ORDER]);
+            setShowLeftRail(true);
+            setExchangeSource("binance");
+            setMaximizedPanel(null);
             try {
               window.localStorage.removeItem(ORDER_KEY);
+              window.localStorage.removeItem(LEFT_RAIL_KEY);
+              window.localStorage.removeItem(EXCHANGE_SOURCE_KEY);
             } catch {}
           }}
         />

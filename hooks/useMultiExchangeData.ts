@@ -3,11 +3,26 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Trade, OrderBookEntry, Candle, LiquidationOrder } from "@/lib/types";
 import { isFuturesSymbol, UNIVERSE, toLabel } from "@/lib/symbols";
-import { marketStore, ExchangeData } from "@/lib/marketStore";
+import { marketStore, ExchangeData, ExchangeSource } from "@/lib/marketStore";
 
 const RECONNECT_MS = 3000;
 const MAX_TRADES = 50;
 const BOOK_LEVELS = 15;
+
+const BYBIT_INTERVAL_MAP: Record<string, string> = {
+  "1m": "1",
+  "5m": "5",
+  "15m": "15",
+  "30m": "30",
+  "1h": "60",
+  "2h": "120",
+  "4h": "240",
+  "6h": "360",
+  "12h": "720",
+  "1d": "D",
+  "1w": "W",
+  "1M": "M",
+};
 
 /** "BTCUSDT" | "btcusdt" -> "BTC" */
 function baseAsset(symbol: string): string {
@@ -17,126 +32,6 @@ function baseAsset(symbol: string): string {
   }
   return upper;
 }
-
-/** Coinbase trades BTC-USD, not BTC-USDT, so the quote is always USD there. */
-function coinbaseProductId(symbol: string): string {
-  return `${baseAsset(symbol)}-USD`;
-}
-
-const EXCHANGES = [
-  {
-    name: "Binance",
-    wsUrl: (symbol: string) =>
-      isFuturesSymbol(symbol) ? "wss://fstream.binance.com/ws" : "wss://stream.binance.com:9443/ws",
-    // Only Binance drives the shared order book; the others would overwrite it
-    bookAuthority: true,
-    // Binance stream names must be lowercase
-    subscribeMsg: (symbol: string, interval: string) => {
-      const lower = symbol.toLowerCase();
-      const s = lower.endsWith("usdt") ? lower : `${lower}usdt`;
-      return {
-        method: "SUBSCRIBE",
-        params: [`${s}@trade`, `${s}@depth20@100ms`, `${s}@kline_${interval}`],
-        id: 1,
-      };
-    },
-    // Raw stream (not /stream), so trade events arrive unwrapped
-    parseTrade: (d: any) => ({
-      price: parseFloat(d.p),
-      size: parseFloat(d.q),
-      side: (d.m ? "sell" : "buy") as "buy" | "sell",
-      time: new Date(d.T).toLocaleTimeString("en-US", { hour12: false }),
-    }),
-    isTrade: (d: any) => d.e === "trade",
-    isBook: (d: any) =>
-      (Array.isArray(d.bids) && Array.isArray(d.asks)) ||
-      (Array.isArray(d.b) && Array.isArray(d.a)),
-    parseBook: (d: any) => {
-      const bids = d.bids ?? d.b ?? [];
-      const asks = d.asks ?? d.a ?? [];
-      return {
-        bids: bids
-          .slice(0, BOOK_LEVELS)
-          .map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
-        asks: asks
-          .slice(0, BOOK_LEVELS)
-          .map(([p, s]: [string, string]) => ({ price: parseFloat(p), size: parseFloat(s), total: 0 })),
-      };
-    },
-  },
-  {
-    name: "Coinbase",
-    wsUrl: () => "wss://ws-feed.exchange.coinbase.com",
-    bookAuthority: false,
-    // Coinbase product IDs are dash-separated and use USD, not USDT
-    subscribeMsg: (symbol: string) => ({
-      type: "subscribe",
-      product_ids: [coinbaseProductId(symbol)],
-      channels: ["ticker"],
-    }),
-    parseTrade: (d: any) => ({
-      price: parseFloat(d.price),
-      size: parseFloat(d.last_size ?? d.volume ?? 0),
-      side: (d.side === "buy" ? "sell" : "buy") as "buy" | "sell",
-      time: new Date(d.time ?? Date.now()).toLocaleTimeString("en-US", { hour12: false }),
-    }),
-    isTrade: (d: any) => d.type === "ticker" || d.type === "match",
-    isBook: () => false,
-    parseBook: () => ({ bids: [], asks: [] }),
-  },
-  {
-    name: "OKX",
-    wsUrl: () => "wss://ws.okx.com:8443/ws/v5/public",
-    bookAuthority: false,
-    // OKX instrument IDs are dash-separated
-    subscribeMsg: (symbol: string) => ({
-      op: "subscribe",
-      args: [{ channel: "trades", instId: `${baseAsset(symbol)}-USDT` }],
-    }),
-    // OKX nests trades at data[] and names the channel under arg
-    parseTrade: (d: any) => {
-      const t = Array.isArray(d.data) ? d.data[0] : null;
-      if (!t) return null;
-      return {
-        price: parseFloat(t.px),
-        size: parseFloat(t.sz),
-        side: (t.side === "buy" ? "buy" : "sell") as "buy" | "sell",
-        time: new Date(Number(t.ts)).toLocaleTimeString("en-US", { hour12: false }),
-      };
-    },
-    isTrade: (d: any) => d?.arg?.channel === "trades",
-    isBook: () => false,
-    parseBook: () => ({ bids: [], asks: [] }),
-  },
-  {
-    // Spot, not the linear/perp stream — the other feeds are spot too, so this
-    // keeps the aggregate free of perpetual basis.
-    name: "Bybit",
-    wsUrl: () => "wss://stream.bybit.com/v5/public/spot",
-    bookAuthority: false,
-    // Bybit requires a pong reply or it drops the socket after ~20s
-    requiresPong: true,
-    subscribeMsg: (symbol: string) => ({
-      op: "subscribe",
-      // Bybit spot instruments are unseparated: BTCUSDT, not BTC-USDT
-      args: [`publicTrade.${baseAsset(symbol)}USDT`],
-    }),
-    // { topic: "publicTrade.BTCUSDT", type: "snapshot", data: [{ p, v, S, T }] }
-    parseTrade: (d: any) => {
-      const t = Array.isArray(d.data) ? d.data[0] : null;
-      if (!t) return null;
-      return {
-        price: parseFloat(t.p),
-        size: parseFloat(t.v),
-        side: (t.S === "Buy" ? "buy" : "sell") as "buy" | "sell",
-        time: new Date(Number(t.T)).toLocaleTimeString("en-US", { hour12: false }),
-      };
-    },
-    isTrade: (d: any) => typeof d?.topic === "string" && d.topic.startsWith("publicTrade."),
-    isBook: () => false,
-    parseBook: () => ({ bids: [], asks: [] }),
-  },
-] as const;
 
 /**
  * Global WebSocket stream for all universe symbols.
@@ -337,66 +232,107 @@ function useLiquidationsFeed() {
 }
 
 /**
- * Feeds live market data into marketStore outside React state.
- * Never causes the caller (Home) to re-render.
+ * Feeds live market data from a unified exchange source (Binance or Bybit)
+ * into marketStore outside React state. Never causes the caller (Home) to re-render.
  */
-export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
+export function useMarketFeed(
+  symbol = "btcusdt",
+  interval = "1h",
+  source: ExchangeSource = "binance"
+): void {
   useUniverseTickersFeed();
   useLiquidationsFeed();
 
-  const socketsRef = useRef<WebSocket[]>([]);
-  const retryRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const wsRef = useRef<WebSocket | null>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tradeIdRef = useRef(0);
 
   const symbolRef = useRef(symbol);
   const intervalRef = useRef(interval);
+  const sourceRef = useRef<ExchangeSource>(source);
   symbolRef.current = symbol;
   intervalRef.current = interval;
+  sourceRef.current = source;
 
-  // Per-exchange prices live in a ref so socket callbacks never read stale state
-  const pricesRef = useRef<Map<string, ExchangeData>>(
-    new Map(EXCHANGES.map((e) => [e.name, { name: e.name, price: 0, connected: false, lastUpdate: 0 }]))
-  );
+  // Bybit sends snapshot + delta orderbooks; keep level maps per connection
+  const bybitBidsRef = useRef<Map<number, number>>(new Map());
+  const bybitAsksRef = useRef<Map<number, number>>(new Map());
 
-  const connectOne = useCallback((idx: number) => {
-    const exchange = EXCHANGES[idx];
+  const connectUnified = useCallback(() => {
     const currentSym = symbolRef.current;
+    const currentInterval = intervalRef.current;
     const isFutures = isFuturesSymbol(currentSym);
+    // Commodities (XAU, XAG, OIL) are hosted on Binance Futures
+    const activeSource: ExchangeSource = isFutures ? "binance" : sourceRef.current;
+    const venueName = activeSource === "bybit" ? "Bybit" : "Binance";
 
-    // If this is a commodity/futures pair, only Binance supports it
-    if (exchange.name !== "Binance" && isFutures) {
-      const prev = pricesRef.current.get(exchange.name)!;
-      pricesRef.current.set(exchange.name, {
-        name: exchange.name,
-        connected: false,
-        price: 0,
-        lastUpdate: prev.lastUpdate,
-      });
-      marketStore.setState({
-        venues: EXCHANGES.map((e) => pricesRef.current.get(e.name)!),
-      });
-      return;
-    }
+    bybitBidsRef.current.clear();
+    bybitAsksRef.current.clear();
 
-    const wsUrl = exchange.wsUrl(currentSym);
+    const wsUrl =
+      activeSource === "bybit"
+        ? "wss://stream.bybit.com/v5/public/spot"
+        : isFutures
+          ? "wss://fstream.binance.com/ws"
+          : "wss://stream.binance.com:9443/ws";
+
     const ws = new WebSocket(wsUrl);
-    socketsRef.current[idx] = ws;
+    wsRef.current = ws;
 
-    const markState = (connected: boolean, price?: number) => {
-      const prev = pricesRef.current.get(exchange.name)!;
-      pricesRef.current.set(exchange.name, {
-        name: exchange.name,
-        connected,
-        price: price ?? prev.price,
-        lastUpdate: connected ? Date.now() : prev.lastUpdate,
-      });
+    const markState = (connected: boolean, latestPrice?: number) => {
+      const prevState = marketStore.getState();
+      const nextPrice =
+        latestPrice !== undefined && latestPrice > 0 ? latestPrice : prevState.aggregatedPrice;
+      const venues: ExchangeData[] = prevState.venues.map((v) =>
+        v.name === venueName
+          ? {
+              name: v.name,
+              connected,
+              price: nextPrice,
+              lastUpdate: connected ? Date.now() : v.lastUpdate,
+            }
+          : { ...v, connected: false, price: 0 }
+      );
       marketStore.setState({
-        venues: EXCHANGES.map((e) => pricesRef.current.get(e.name)!),
+        venues,
+        aggregatedPrice: nextPrice,
+        connected,
+        exchangeCount: connected ? 1 : 0,
       });
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify(exchange.subscribeMsg(symbolRef.current, intervalRef.current)));
+      const symUpper = `${baseAsset(currentSym)}USDT`;
+      if (activeSource === "bybit") {
+        const bybitInterval = BYBIT_INTERVAL_MAP[currentInterval] || "60";
+        ws.send(
+          JSON.stringify({
+            op: "subscribe",
+            args: [
+              `publicTrade.${symUpper}`,
+              `orderbook.50.${symUpper}`,
+              `kline.${bybitInterval}.${symUpper}`,
+            ],
+          })
+        );
+        if (pingRef.current) clearInterval(pingRef.current);
+        pingRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ op: "ping" }));
+          }
+        }, 18000);
+      } else {
+        const lower = currentSym.toLowerCase();
+        const s = lower.endsWith("usdt") ? lower : `${lower}usdt`;
+        ws.send(
+          JSON.stringify({
+            method: "SUBSCRIBE",
+            params: [`${s}@trade`, `${s}@depth20@100ms`, `${s}@kline_${currentInterval}`],
+            id: 1,
+          })
+        );
+      }
       markState(true);
     };
 
@@ -408,126 +344,267 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
         return;
       }
 
-      // Bybit sends { op: "ping" } every 20s and drops the socket if unanswered
-      if (payload?.op === "ping") {
-        ws.send(JSON.stringify({ op: "pong" }));
-        return;
-      }
-      // Subscribe acks carry no price. A failed ack must be surfaced — Bybit answers
-      // a bad topic with { success: false, ret_msg: "Invalid symbol" } and simply
-      // never sends data, which is otherwise invisible.
-      if (payload?.op === "subscribe" || payload?.success !== undefined) {
-        if (payload.success === false) {
-          console.error(
-            `[${exchange.name}] subscribe failed: ${payload.ret_msg || "unknown reason"}`
-          );
-          markState(false);
+      if (activeSource === "bybit") {
+        // Bybit V5 replies to client `{ op: "ping" }` with `{ success: true, ret_msg: "pong", op: "ping" }`
+        if (payload?.op === "pong" || payload?.ret_msg === "pong") {
+          return;
+        }
+        if (payload?.op === "ping" && payload?.success === undefined) {
+          ws.send(JSON.stringify({ op: "pong" }));
+          return;
+        }
+        if (payload?.op === "subscribe" || payload?.success !== undefined) {
+          if (payload?.op === "subscribe" && payload.success === false) {
+            console.warn(
+              `[Bybit] subscribe failed: ${payload.ret_msg || "unknown reason"}`
+            );
+            markState(false);
+          }
+          return;
+        }
+
+        const topic: string = typeof payload?.topic === "string" ? payload.topic : "";
+
+        // 1. Bybit OrderBook (snapshot + delta)
+        if (topic.startsWith("orderbook.")) {
+          const data = payload.data;
+          if (!data) return;
+          if (payload.type === "snapshot") {
+            bybitBidsRef.current.clear();
+            bybitAsksRef.current.clear();
+          }
+          if (Array.isArray(data.b)) {
+            for (const [pStr, sStr] of data.b) {
+              const p = parseFloat(pStr);
+              const s = parseFloat(sStr);
+              if (s === 0) bybitBidsRef.current.delete(p);
+              else if (Number.isFinite(p) && Number.isFinite(s)) bybitBidsRef.current.set(p, s);
+            }
+          }
+          if (Array.isArray(data.a)) {
+            for (const [pStr, sStr] of data.a) {
+              const p = parseFloat(pStr);
+              const s = parseFloat(sStr);
+              if (s === 0) bybitAsksRef.current.delete(p);
+              else if (Number.isFinite(p) && Number.isFinite(s)) bybitAsksRef.current.set(p, s);
+            }
+          }
+
+          let bidTotal = 0;
+          let askTotal = 0;
+          const sortedBids = Array.from(bybitBidsRef.current.entries())
+            .sort((a, b) => b[0] - a[0])
+            .slice(0, BOOK_LEVELS)
+            .map(([price, size]) => ({ price, size, total: (bidTotal += size) }));
+          const sortedAsks = Array.from(bybitAsksRef.current.entries())
+            .sort((a, b) => a[0] - b[0])
+            .slice(0, BOOK_LEVELS)
+            .map(([price, size]) => ({ price, size, total: (askTotal += size) }));
+
+          marketStore.setState({
+            orderBook: { bids: sortedBids, asks: sortedAsks },
+          });
+          return;
+        }
+
+        // 2. Bybit Live Kline
+        if (topic.startsWith("kline.")) {
+          const k = Array.isArray(payload.data) ? payload.data[0] : null;
+          if (!k) return;
+          const candleTime = Math.floor(Number(k.start) / 1000 / 60) * 60;
+          const closePrice = parseFloat(k.close);
+          const candle: Candle = {
+            time: candleTime,
+            open: parseFloat(k.open),
+            high: parseFloat(k.high),
+            low: parseFloat(k.low),
+            close: closePrice,
+            volume: parseFloat(k.volume),
+          };
+          // Only update live candle once historical klines have loaded so a single WS tick
+          // never masquerades as the entire chart history.
+          if (marketStore.getState().candles.length > 0) {
+            marketStore.updateLiveCandle(candle);
+          }
+          if (Number.isFinite(closePrice) && closePrice > 0) {
+            markState(true, closePrice);
+          }
+          return;
+        }
+
+        // 3. Bybit Public Trade
+        if (topic.startsWith("publicTrade.")) {
+          const t = Array.isArray(payload.data) ? payload.data[0] : null;
+          if (!t) return;
+          const price = parseFloat(t.p);
+          const size = parseFloat(t.v);
+          if (!Number.isFinite(price) || price <= 0) return;
+          const trade = {
+            price,
+            size,
+            side: (t.S === "Buy" ? "buy" : "sell") as "buy" | "sell",
+            time: new Date(Number(t.T)).toLocaleTimeString("en-US", { hour12: false }),
+          };
+          markState(true, price);
+          const currentTrades = marketStore.getState().trades;
+          marketStore.setState({
+            trades: [{ id: tradeIdRef.current++, ...trade }, ...currentTrades].slice(0, MAX_TRADES),
+          });
+          return;
         }
         return;
       }
 
-      // Each exchange wraps payloads differently; the isBook/isTrade/parseTrade
-      // predicates own their envelope. Only Binance klines need unwrapping,
-      // because /stream nests them one level under data.
-      const msg =
-        payload?.e === "kline" && payload?.data ? payload.data : payload;
+      // --- BINANCE STREAM HANDLER ---
+      const msg = payload?.e === "kline" && payload?.data ? payload.data : payload;
 
-      if (exchange.bookAuthority && exchange.isBook(msg)) {
-        const raw = exchange.parseBook(msg);
+      // 1. Binance OrderBook
+      if (
+        (Array.isArray(msg?.bids) && Array.isArray(msg?.asks)) ||
+        (Array.isArray(msg?.b) && Array.isArray(msg?.a))
+      ) {
+        const bids = msg.bids ?? msg.b ?? [];
+        const asks = msg.asks ?? msg.a ?? [];
         let bidTotal = 0;
         let askTotal = 0;
         marketStore.setState({
           orderBook: {
-            bids: raw.bids.map((b: OrderBookEntry) => ({ ...b, total: (bidTotal += b.size) })),
-            asks: raw.asks.map((a: OrderBookEntry) => ({ ...a, total: (askTotal += a.size) })),
+            bids: bids
+              .slice(0, BOOK_LEVELS)
+              .map(([p, s]: [string, string]) => {
+                const size = parseFloat(s);
+                return { price: parseFloat(p), size, total: (bidTotal += size) };
+              }),
+            asks: asks
+              .slice(0, BOOK_LEVELS)
+              .map(([p, s]: [string, string]) => {
+                const size = parseFloat(s);
+                return { price: parseFloat(p), size, total: (askTotal += size) };
+              }),
           },
         });
         return;
       }
 
-      // Binance real-time kline stream (@kline_<interval>)
+      // 2. Binance Real-Time Kline (@kline_<interval>)
       if (msg?.e === "kline" && msg?.k) {
         const k = msg.k;
-        const s = symbol.toLowerCase().replace(/[\/\s]/g, "");
+        const s = currentSym.toLowerCase().replace(/[\/\s]/g, "");
         const expectedSymbol = (s.endsWith("usdt") ? s : `${s}usdt`).toUpperCase();
-        if (k.s?.toUpperCase() === expectedSymbol && k.i === interval) {
+        if (k.s?.toUpperCase() === expectedSymbol && k.i === currentInterval) {
           const candleTime = Math.floor(k.t / 1000);
+          const closePrice = parseFloat(k.c);
           const candle: Candle = {
             time: candleTime,
             open: parseFloat(k.o),
             high: parseFloat(k.h),
             low: parseFloat(k.l),
-            close: parseFloat(k.c),
+            close: closePrice,
             volume: parseFloat(k.v),
           };
-          marketStore.updateLiveCandle(candle);
+          // Only update live candle once historical klines have loaded so a single WS tick
+          // never masquerades as the entire chart history.
+          if (marketStore.getState().candles.length > 0) {
+            marketStore.updateLiveCandle(candle);
+          }
+          if (Number.isFinite(closePrice) && closePrice > 0) {
+            markState(true, closePrice);
+          }
         }
         return;
       }
 
-      if (!exchange.isTrade(msg)) return;
-      const trade = exchange.parseTrade(msg);
-      if (!trade || !Number.isFinite(trade.price) || trade.price <= 0) return;
-      markState(true, trade.price);
-      const currentTrades = marketStore.getState().trades;
-      marketStore.setState({
-        trades: [{ id: tradeIdRef.current++, ...trade }, ...currentTrades].slice(0, MAX_TRADES),
-      });
+      // 3. Binance Trade
+      if (msg?.e === "trade") {
+        const price = parseFloat(msg.p);
+        const size = parseFloat(msg.q);
+        if (!Number.isFinite(price) || price <= 0) return;
+        const trade = {
+          price,
+          size,
+          side: (msg.m ? "sell" : "buy") as "buy" | "sell",
+          time: new Date(msg.T).toLocaleTimeString("en-US", { hour12: false }),
+        };
+        markState(true, price);
+        const currentTrades = marketStore.getState().trades;
+        marketStore.setState({
+          trades: [{ id: tradeIdRef.current++, ...trade }, ...currentTrades].slice(0, MAX_TRADES),
+        });
+      }
     };
 
     ws.onerror = () => markState(false);
 
-    // Reconnect only this exchange, leaving healthy sockets untouched
     ws.onclose = () => {
       markState(false);
-      if (socketsRef.current[idx] !== ws) return;
-      retryRef.current.set(
-        idx,
-        setTimeout(() => {
-          retryRef.current.delete(idx);
-          if (socketsRef.current[idx] === ws) connectOne(idx);
-        }, RECONNECT_MS)
-      );
+      if (pingRef.current) {
+        clearInterval(pingRef.current);
+        pingRef.current = null;
+      }
+      if (wsRef.current !== ws) return;
+      retryRef.current = setTimeout(() => {
+        retryRef.current = null;
+        if (wsRef.current === ws) connectUnified();
+      }, RECONNECT_MS);
     };
   }, []);
 
-  const connectAll = useCallback(() => {
-    retryRef.current.forEach((t) => clearTimeout(t));
-    retryRef.current.clear();
-    socketsRef.current.forEach((ws) => {
-      ws.onclose = null;
-      ws.close();
-    });
-    socketsRef.current = [];
-    EXCHANGES.forEach((_, idx) => connectOne(idx));
-  }, [connectOne]);
-
-  // Reset store and connect sockets on symbol/interval change (Req. 5)
+  // Reset store and connect unified socket on symbol/interval/source change
   useEffect(() => {
-    marketStore.reset(symbol, interval);
-    connectAll();
-    const sockets = socketsRef.current;
-    return () => {
-      retryRef.current.forEach((t) => clearTimeout(t));
-      retryRef.current.clear();
-      sockets.forEach((ws) => {
-        ws.onclose = null;
-        ws.close();
-      });
-    };
-  }, [symbol, interval, connectAll]);
+    marketStore.reset(symbol, interval, source);
+    if (retryRef.current) {
+      clearTimeout(retryRef.current);
+      retryRef.current = null;
+    }
+    if (pingRef.current) {
+      clearInterval(pingRef.current);
+      pingRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    connectUnified();
 
-  // Historical candles: our API merges static-klines history with live Binance data
+    return () => {
+      if (retryRef.current) {
+        clearTimeout(retryRef.current);
+        retryRef.current = null;
+      }
+      if (pingRef.current) {
+        clearInterval(pingRef.current);
+        pingRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [symbol, interval, source, connectUnified]);
+
+  // Historical candles from the unified exchange source
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const res = await fetch(`/api/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&t=${Date.now()}`);
+        const res = await fetch(
+          `/api/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&source=${source}&t=${Date.now()}`
+        );
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         if (!cancelled && Array.isArray(data) && data.length > 0) {
-          marketStore.setState({ candles: data, candleError: false });
+          const latestClose = data[data.length - 1]?.close ?? 0;
+          const curPrice = marketStore.getState().price;
+          marketStore.setState({
+            candles: data,
+            candleError: false,
+            ...(curPrice === 0 && latestClose > 0
+              ? { price: latestClose, aggregatedPrice: latestClose }
+              : {}),
+          });
         }
       } catch {
         if (!cancelled) {
@@ -540,26 +617,30 @@ export function useMarketFeed(symbol = "btcusdt", interval = "1h"): void {
     return () => {
       cancelled = true;
     };
-  }, [symbol, interval]);
+  }, [symbol, interval, source]);
 
   // Fallback REST poll to keep active candle resilient during network drops
   useEffect(() => {
     const tick = async () => {
       try {
-        const res = await fetch(`/api/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&live=1&t=${Date.now()}`);
+        if (marketStore.getState().candles.length === 0) return;
+        const res = await fetch(
+          `/api/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&source=${source}&live=1&t=${Date.now()}`
+        );
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return;
         const latest = data[data.length - 1];
-        marketStore.updateLiveCandle(latest);
+        if (marketStore.getState().candles.length > 0) {
+          marketStore.updateLiveCandle(latest);
+        }
       } catch {}
     };
 
     const id = setInterval(tick, 10000);
     return () => clearInterval(id);
-  }, [symbol, interval]);
+  }, [symbol, interval, source]);
 
-  // 1 Hz price throttle: copies aggregatedPrice -> price and derives direction,
-  // and keeps tickers updated with the active symbol's multi-exchange aggregated price.
+  // 1 Hz price throttle: copies unified exchange price -> price and derives direction
   useEffect(() => {
     const timer = setInterval(() => {
       const cur = marketStore.getState().aggregatedPrice;

@@ -4,6 +4,22 @@ import { isFuturesSymbol } from "@/lib/symbols";
 const STATIC_ROOT = "https://finom.github.io/static-klines/api/klines";
 const BINANCE_SPOT = "https://api.binance.com/api/v3/klines";
 const BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1/klines";
+const BYBIT_KLINE = "https://api.bybit.com/v5/market/kline";
+
+const BYBIT_INTERVAL_MAP: Record<string, string> = {
+  "1m": "1",
+  "5m": "5",
+  "15m": "15",
+  "30m": "30",
+  "1h": "60",
+  "2h": "120",
+  "4h": "240",
+  "6h": "360",
+  "12h": "720",
+  "1d": "D",
+  "1w": "W",
+  "1M": "M",
+};
 
 // Intervals static-klines actually publishes, and the calendar window each file covers
 const STATIC_SUPPORTED = new Set(["15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]);
@@ -135,19 +151,116 @@ async function fromBinance(
   return data.map(toCandle);
 }
 
+async function fromBybit(
+  symbol: string,
+  interval: string,
+  limit: number,
+  startTime?: number,
+  endTime?: number
+) {
+  const bybitInterval = BYBIT_INTERVAL_MAP[interval] || "60";
+  const url = new URL(BYBIT_KLINE);
+  url.searchParams.set("category", "spot");
+  url.searchParams.set("symbol", symbol);
+  url.searchParams.set("interval", bybitInterval);
+  url.searchParams.set("limit", String(Math.min(limit, 1000)));
+  if (startTime) url.searchParams.set("start", String(startTime));
+  if (endTime) url.searchParams.set("end", String(endTime));
+
+  let res = await fetch(url.toString(), { cache: "no-store" });
+  let json = res.ok ? await res.json() : null;
+  let list = json?.result?.list;
+
+  if (!Array.isArray(list) || list.length === 0) {
+    // Try linear perpetuals if spot pair is unlisted on Bybit
+    const lUrl = new URL(BYBIT_KLINE);
+    lUrl.searchParams.set("category", "linear");
+    lUrl.searchParams.set("symbol", symbol);
+    lUrl.searchParams.set("interval", bybitInterval);
+    lUrl.searchParams.set("limit", String(Math.min(limit, 1000)));
+    if (startTime) lUrl.searchParams.set("start", String(startTime));
+    if (endTime) lUrl.searchParams.set("end", String(endTime));
+    const lRes = await fetch(lUrl.toString(), { cache: "no-store" });
+    if (lRes.ok) {
+      const lJson = await lRes.json();
+      list = lJson?.result?.list;
+    }
+  }
+
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new Error("bybit empty klines");
+  }
+
+  // Bybit V5 returns newest-first; reverse into ascending chronological order
+  return list.slice().reverse().map((row: any) => toCandle([Number(row[0]), row[1], row[2], row[3], row[4], row[5]]));
+}
+
+async function fromExchange(
+  source: string,
+  symbol: string,
+  interval: string,
+  limit: number,
+  startTime?: number,
+  endTime?: number
+) {
+  if (source === "bybit" && !isFuturesSymbol(symbol)) {
+    try {
+      return await fromBybit(symbol, interval, limit, startTime, endTime);
+    } catch {
+      // Fallback to Binance if Bybit fails
+    }
+  }
+  return fromBinance(symbol, interval, limit, startTime, endTime);
+}
+
 export async function GET(request: NextRequest) {
   const symbol = (request.nextUrl.searchParams.get("symbol") || "BTCUSDT").toUpperCase();
   const interval = normalize(request.nextUrl.searchParams.get("interval") || "1h");
+  const source = (request.nextUrl.searchParams.get("source") || "binance").toLowerCase();
   const live = request.nextUrl.searchParams.get("live") === "1";
+  const limitParam = parseInt(request.nextUrl.searchParams.get("limit") || "0", 10);
   const isFutures = isFuturesSymbol(symbol);
 
   try {
-    // Live tick: just the newest candle, straight from Binance
+    // Live tick: just the newest candle, straight from the active exchange
     if (live) {
-      const candles = await fromBinance(symbol, interval, 2);
+      const candles = await fromExchange(source, symbol, interval, 2);
       return NextResponse.json(candles, {
         headers: { "Cache-Control": "no-store" },
       });
+    }
+
+    // Fast bounded query for tactical scanners (e.g. ?limit=200)
+    if (limitParam > 0 && limitParam <= 1000) {
+      const candles = await fromExchange(source, symbol, interval, limitParam);
+      return NextResponse.json(dedupe(candles), {
+        headers: { "Cache-Control": "s-maxage=30" },
+      });
+    }
+
+    // When Bybit is explicitly selected for non-commodity pairs, serve pure Bybit klines (paged up to 2,000 bars)
+    if (source === "bybit" && !isFutures) {
+      const pages = 2;
+      const perPage = 1000;
+      let endTime: number | undefined;
+      const all: ReturnType<typeof toCandle>[] = [];
+
+      for (let i = 0; i < pages; i++) {
+        try {
+          const candles = await fromBybit(symbol, interval, perPage, undefined, endTime);
+          if (candles.length === 0) break;
+          all.unshift(...candles);
+          if (candles.length < perPage) break;
+          endTime = candles[0].time * 1000 - 1;
+        } catch {
+          break;
+        }
+      }
+
+      const deduped = dedupe(all);
+      if (deduped.length > 0) {
+        return NextResponse.json(deduped, { headers: { "Cache-Control": "s-maxage=60" } });
+      }
     }
 
     // Commodities / Futures symbols (XAU, XAG, CL) are served directly from Binance Futures

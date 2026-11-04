@@ -14,6 +14,8 @@ interface CommandBarProps {
   onSelectSymbol?: (symbol: string) => void;
   selectedSymbol?: string;
   onOpenSymbolSearch?: () => void;
+  showLeftRail?: boolean;
+  onToggleLeftRail?: () => void;
 }
 
 export default function CommandBar({
@@ -23,6 +25,8 @@ export default function CommandBar({
   onSelectSymbol,
   selectedSymbol,
   onOpenSymbolSearch,
+  showLeftRail = true,
+  onToggleLeftRail,
 }: CommandBarProps) {
   const { theme } = useTheme();
   const [value, setValue] = useState("");
@@ -72,6 +76,21 @@ export default function CommandBar({
       style={{ background: theme.panel, borderColor: theme.border }}
     >
       <div className="flex items-center gap-2 shrink-0">
+        {onToggleLeftRail && (
+          <button
+            type="button"
+            onClick={onToggleLeftRail}
+            className="px-1.5 py-1 rounded border text-xs font-mono hover:opacity-80 transition-opacity flex items-center gap-1"
+            style={{
+              borderColor: showLeftRail ? theme.yellow : theme.border,
+              background: showLeftRail ? `${theme.yellow}18` : theme.bg,
+              color: showLeftRail ? theme.yellow : theme.dim,
+            }}
+            title={showLeftRail ? "Hide left panel (Watchlist / Macro / Heatmap)" : "Show left panel (Watchlist / Macro / Heatmap)"}
+          >
+            <span>◧</span>
+          </button>
+        )}
         <div className="font-bold text-base tracking-wider" style={{ color: theme.yellow }}>
           YMC TERMINAL
         </div>

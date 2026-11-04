@@ -127,6 +127,7 @@ export function useIndicatorPanes({
   // Sub-panes for RSI / MACD / Stoch / OI / Funding / CVD (v5 native panes), kept across theme changes so a
   // user-resized pane keeps its height until the indicator is switched off.
   const paneRefs = useRef<Map<PaneIndicator, IPaneApi<Time>>>(new Map());
+  const lastChartRef = useRef<IChartApi | null>(null);
 
   // Fetch derivatives data (OI, Funding) when respective indicators are enabled (throttled when backgrounded)
   const needsDerivatives = activeIndicators.has("oi") || activeIndicators.has("funding");
@@ -151,11 +152,12 @@ export function useIndicatorPanes({
   useVisibilityPolling(fetchDerivatives, 30_000, { enabled: needsDerivatives });
 
   const computed = useMemo(() => {
-    if (candles.length === 0) return null;
-    const smaFast = sma(candles, settings.sma.fast);
-    const smaSlow = sma(candles, settings.sma.slow);
-    const emaFast = ema(candles, settings.ema.fast);
-    const emaSlow = ema(candles, settings.ema.slow);
+    if (candles.length === 0 || activeIndicators.size === 0) return null;
+    const emptyArr: (number | null)[] = [];
+    const smaFast = activeIndicators.has("sma") ? sma(candles, settings.sma.fast) : emptyArr;
+    const smaSlow = activeIndicators.has("sma") ? sma(candles, settings.sma.slow) : emptyArr;
+    const emaFast = activeIndicators.has("ema") ? ema(candles, settings.ema.fast) : emptyArr;
+    const emaSlow = activeIndicators.has("ema") ? ema(candles, settings.ema.slow) : emptyArr;
     return {
       smaFast,
       smaSlow,
@@ -165,19 +167,25 @@ export function useIndicatorPanes({
       emaSlow,
       ema20: emaFast,
       ema50: emaSlow,
-      bb: bollingerBands(candles, settings.bollinger.period, settings.bollinger.stdDev),
-      rsi: rsi(candles, settings.rsi.period),
-      macd: macd(candles, settings.macd.fast, settings.macd.slow, settings.macd.signal),
-      stochRsi: stochRsi(
-        candles,
-        settings.stochrsi.lengthRSI,
-        settings.stochrsi.lengthStoch,
-        settings.stochrsi.smoothK,
-        settings.stochrsi.smoothD
-      ),
-      cvd: cvd(candles),
+      bb: activeIndicators.has("bollinger")
+        ? bollingerBands(candles, settings.bollinger.period, settings.bollinger.stdDev)
+        : { upper: emptyArr, middle: emptyArr, lower: emptyArr },
+      rsi: activeIndicators.has("rsi") ? rsi(candles, settings.rsi.period) : emptyArr,
+      macd: activeIndicators.has("macd")
+        ? macd(candles, settings.macd.fast, settings.macd.slow, settings.macd.signal)
+        : { macdLine: emptyArr, signalLine: emptyArr, histogram: emptyArr },
+      stochRsi: activeIndicators.has("stochrsi")
+        ? stochRsi(
+            candles,
+            settings.stochrsi.lengthRSI,
+            settings.stochrsi.lengthStoch,
+            settings.stochrsi.smoothK,
+            settings.stochrsi.smoothD
+          )
+        : { k: emptyArr, d: emptyArr },
+      cvd: activeIndicators.has("cvd") ? cvd(candles) : emptyArr,
     };
-  }, [candles, settings]);
+  }, [candles, settings, activeIndicators]);
 
   const computedRef = useRef<ComputedValues | null>(null);
   computedRef.current = computed;
@@ -222,28 +230,35 @@ export function useIndicatorPanes({
     const chart = chartRef.current;
     if (!chart) return;
 
-    // Tear down previous indicator series
-    indicatorRefs.current.forEach((seriesList) => {
-      seriesList.forEach((s) => {
-        try {
-          chart.removeSeries(s);
-        } catch {}
+    if (lastChartRef.current !== chart) {
+      indicatorRefs.current.clear();
+      paneRefs.current.clear();
+      lastChartRef.current = chart;
+    }
+
+    try {
+      // Tear down previous indicator series
+      indicatorRefs.current.forEach((seriesList) => {
+        seriesList.forEach((s) => {
+          try {
+            chart.removeSeries(s);
+          } catch {}
+        });
       });
-    });
-    indicatorRefs.current.clear();
+      indicatorRefs.current.clear();
 
-    // Drop sub-panes that are no longer active
-    paneRefs.current.forEach((pane, key) => {
-      if (!activeIndicators.has(key)) {
-        try {
-          chart.removePane(pane.paneIndex());
-        } catch {}
-        paneRefs.current.delete(key);
-      }
-    });
+      // Drop sub-panes that are no longer active
+      paneRefs.current.forEach((pane, key) => {
+        if (!activeIndicators.has(key)) {
+          try {
+            chart.removePane(pane.paneIndex());
+          } catch {}
+          paneRefs.current.delete(key);
+        }
+      });
 
-    const comp = computedRef.current;
-    if (!comp) return;
+      const comp = computedRef.current;
+      if (!comp) return;
 
     // Reuse an existing pane (keeps user-resized height); create one otherwise.
     const ensurePane = (key: PaneIndicator): IPaneApi<Time> => {
@@ -460,6 +475,7 @@ export function useIndicatorPanes({
       cvdSeries.setData(line(comp.cvd));
       indicatorRefs.current.set("cvd", [cvdSeries]);
     }
+    } catch {}
   }, [
     activeIndicators,
     theme,
@@ -476,6 +492,7 @@ export function useIndicatorPanes({
   /* ---------------- data effect: push fresh values on every tick ---------------- */
 
   useEffect(() => {
+    if (!chartRef.current) return;
     if (computed) {
       OVERLAYS.forEach((key) => {
         const entry = indicatorRefs.current.get(key);

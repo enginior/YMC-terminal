@@ -20,6 +20,8 @@ import {
   candleAt,
 } from "./types";
 
+const EMPTY_DRAWINGS: Drawing[] = [];
+
 interface UseDrawingsOptions {
   chartRef: React.RefObject<IChartApi | null>;
   candleSeriesRef: React.RefObject<ISeriesApi<"Candlestick"> | null>;
@@ -63,7 +65,7 @@ export function useDrawings({
   const historyRef = useRef<Record<string, { past: Drawing[][]; future: Drawing[][] }>>({});
   const [, setHistoryEpoch] = useState(0);
 
-  const drawings = drawingsBySymbol[symbol] ?? [];
+  const drawings = drawingsBySymbol[symbol] ?? EMPTY_DRAWINGS;
 
   const drawingsPrimRef = useRef<DrawingsPrimitive | null>(null);
   const draftRef = useRef<Drawing | null>(null);
@@ -273,7 +275,7 @@ export function useDrawings({
 
     const onCrosshairMove = (param: any) => {
       const prim = drawingsPrimRef.current;
-      if (!prim) return;
+      if (!prim || chartRef.current !== chart || candleSeriesRef.current !== series) return;
 
       const mainPane = (param.paneIndex ?? 0) === 0;
 
@@ -283,14 +285,19 @@ export function useDrawings({
           stateRef.current.chartType === "line"
             ? (lineSeriesRef.current ?? series)
             : series;
-        const price = activeSeries.coordinateToPrice(param.point.y);
+        let price: number | null = null;
+        try {
+          price = activeSeries.coordinateToPrice(param.point.y);
+        } catch {}
         const candle = candleAt(stateRef.current.snapCandles, param.time);
         if (price != null && candle) {
           const snapped = snapPriceToOhlc(candle, price);
           const last = lastSnapRef.current;
           if (!last || last.time !== param.time || last.price !== snapped) {
             lastSnapRef.current = { time: param.time, price: snapped };
-            chart.setCrosshairPosition(snapped, param.time, activeSeries);
+            try {
+              chart.setCrosshairPosition(snapped, param.time, activeSeries);
+            } catch {}
           }
         }
       }
@@ -321,6 +328,7 @@ export function useDrawings({
     };
 
     const onClick = (param: any) => {
+      if (chartRef.current !== chart || candleSeriesRef.current !== series) return;
       if ((param.paneIndex ?? 0) !== 0) return;
       if (stateRef.current.isLocked || stateRef.current.isHidden) return;
       if (stateRef.current.drawMode !== "none" || !param.point) return;
@@ -342,40 +350,89 @@ export function useDrawings({
       drawingsPrimRef.current?.setInteraction(hoveredRef.current, hit);
     };
 
-    chart.subscribeCrosshairMove(onCrosshairMove);
-    chart.subscribeClick(onClick);
+    try {
+      chart.subscribeCrosshairMove(onCrosshairMove);
+      chart.subscribeClick(onClick);
+    } catch {}
 
     return () => {
-      chart.unsubscribeCrosshairMove(onCrosshairMove);
-      chart.unsubscribeClick(onClick);
+      if (chartRef.current === chart) {
+        try {
+          chart.unsubscribeCrosshairMove(onCrosshairMove);
+          chart.unsubscribeClick(onClick);
+          series.detachPrimitive(drawingsPrim);
+        } catch {}
+      }
       drawingsPrimRef.current = null;
     };
-  }, [chartEpoch, theme, removeDrawingById, chartRef, candleSeriesRef, lineSeriesRef, containerRef]);
+  }, [chartEpoch, removeDrawingById, chartRef, candleSeriesRef, lineSeriesRef, containerRef]);
+
+  const snapCandleCount = snapCandles.length;
+  const snapLastTime = snapCandleCount > 0 ? snapCandles[snapCandleCount - 1].time : 0;
+
+  // Auto-clean any cross-symbol contaminated setup drawings (e.g. a $85,000 BTC setup stored under Gold)
+  useEffect(() => {
+    if (candles.length === 0) return;
+    const refClose = candles[candles.length - 1]?.close;
+    if (!refClose || refClose <= 0) return;
+
+    const currentList = drawingsBySymbol[symbol];
+    if (!currentList || currentList.length === 0) return;
+
+    const hasMismatched = currentList.some((d) => {
+      if (d.price1 <= 0) return false;
+      const ratio = d.price1 / refClose;
+      return ratio > 4 || ratio < 0.25;
+    });
+
+    if (hasMismatched) {
+      setDrawingsBySymbol((prev) => {
+        const list = prev[symbol] ?? [];
+        const cleaned = list.filter((d) => {
+          if (d.price1 <= 0) return true;
+          const ratio = d.price1 / refClose;
+          return ratio <= 4 && ratio >= 0.25;
+        });
+        return { ...prev, [symbol]: cleaned };
+      });
+    }
+  }, [symbol, candles, drawingsBySymbol]);
 
   // Push committed drawings and styles to the primitive
   useEffect(() => {
     const prim = drawingsPrimRef.current;
-    if (!prim) return;
-    prim.setStyle({ labelBg: theme.panel });
-    prim.setHidden(isHidden);
-    prim.setDrawings(drawings);
-    prim.setCandles(snapCandles);
-    prim.setInteraction(hoveredRef.current, selectedRef.current);
-  }, [drawings, theme, snapCandles, isHidden]);
+    if (!prim || !chartRef.current) return;
+    try {
+      prim.setStyle({ labelBg: theme.panel });
+      prim.setHidden(isHidden);
+      prim.setDrawings(drawings);
+      prim.setCandles(snapCandles);
+      prim.setInteraction(hoveredRef.current, selectedRef.current);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, drawings, theme, snapCandleCount, snapLastTime, isHidden, chartRef]);
 
   // Drop selection when symbol changes, or when drawings are locked or hidden
   useEffect(() => {
     selectedRef.current = null;
     hoveredRef.current = null;
     setSelectedId(null);
-    drawingsPrimRef.current?.setInteraction(null, null);
+    if (chartRef.current) {
+      try {
+        drawingsPrimRef.current?.setInteraction(null, null);
+      } catch {}
+    }
     if (containerRef.current) containerRef.current.style.cursor = "default";
-  }, [symbol, isLocked, isHidden, containerRef]);
+  }, [symbol, isLocked, isHidden, containerRef, chartRef]);
 
   // Toggling magnet off releases snapped crosshair
   useEffect(() => {
     lastSnapRef.current = null;
-    if (!magnetOn) chartRef.current?.clearCrosshairPosition();
+    if (!magnetOn && chartRef.current) {
+      try {
+        chartRef.current.clearCrosshairPosition();
+      } catch {}
+    }
   }, [magnetOn, chartRef]);
 
   /* ---------------- pointer events on overlay ---------------- */
@@ -677,6 +734,63 @@ export function useDrawings({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [removeDrawingById, setShowVolume, setShowDayLines, undo, redo]);
+
+  /* ---------------- external setup plotter bridge ---------------- */
+
+  useEffect(() => {
+    const onPlotSetup = (e: Event) => {
+      const custom = e as CustomEvent<{
+        symbol: string;
+        direction: "LONG" | "SHORT";
+        time1: number;
+        time2: number;
+        entryPrice: number;
+        stopPrice: number;
+        targetPrice: number;
+        label?: string;
+      }>;
+      const d = custom.detail;
+      if (!d || !d.symbol) return;
+
+      const targetSym = d.symbol;
+      const id = `setup-${Date.now()}`;
+      const newDrawing: Drawing = {
+        id,
+        tool: d.direction === "LONG" ? "long" : "short",
+        time1: d.time1,
+        price1: d.entryPrice,
+        time2: d.time2,
+        price2: d.targetPrice,
+        stopPrice: d.stopPrice,
+        label: d.label,
+        color: d.direction === "LONG" ? stateRef.current.theme.green : stateRef.current.theme.red,
+        lineWidth: 2,
+        lineStyle: "solid",
+      };
+
+      setDrawingsBySymbol((prev) => {
+        const existing = prev[targetSym] ?? [];
+        if (targetSym === stateRef.current.symbol) {
+          recordHistory(existing);
+        }
+        // Replace prior auto-plotted setup on that symbol so the chart stays clean, preserving manual drawings
+        const filtered = existing.filter((item) => !item.id.startsWith("setup-"));
+        return {
+          ...prev,
+          [targetSym]: [...filtered, newDrawing],
+        };
+      });
+
+      if (targetSym === stateRef.current.symbol) {
+        selectedRef.current = id;
+        setSelectedId(id);
+      }
+      setIsHidden(false);
+    };
+
+    window.addEventListener("btc-terminal:plot-setup", onPlotSetup);
+    return () => window.removeEventListener("btc-terminal:plot-setup", onPlotSetup);
+  }, [recordHistory]);
 
   return {
     drawMode,
