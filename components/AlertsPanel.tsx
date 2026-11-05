@@ -9,11 +9,18 @@ interface AlertsPanelProps {
   alerts: PriceAlert[];
   currentPrice?: number;
   symbol: string;
-  onAddAlert: (symbol: string, condition: "above" | "below", price: number) => void;
+  onAddAlert: (
+    symbol: string,
+    condition: "above" | "below",
+    price: number,
+    options?: { isArmed?: boolean; label?: string }
+  ) => void;
+  onToggleArmed?: (id: number) => void;
   onRemoveAlert: (id: number) => void;
   prefs: AlertPrefs;
   onPrefsChange: (patch: Partial<AlertPrefs>) => void;
   onEnableSound: () => boolean;
+  onTestSound?: (type?: "chime" | "order_filled") => void;
   onRequestDesktopNotification?: () => Promise<boolean>;
 }
 
@@ -22,10 +29,12 @@ function AlertsPanel({
   currentPrice: propPrice,
   symbol,
   onAddAlert,
+  onToggleArmed,
   onRemoveAlert,
   prefs,
   onPrefsChange,
   onEnableSound,
+  onTestSound,
   onRequestDesktopNotification,
 }: AlertsPanelProps) {
   const { theme } = useTheme();
@@ -33,11 +42,15 @@ function AlertsPanel({
   const currentPrice = propPrice ?? storePrice;
   const [condition, setCondition] = useState<"above" | "below">("above");
   const [price, setPrice] = useState("");
+  const [isArmed, setIsArmed] = useState(false);
 
   const handleAdd = () => {
     const numPrice = parseFloat(price);
     if (!isNaN(numPrice) && numPrice > 0) {
-      onAddAlert(symbol, condition, numPrice);
+      onAddAlert(symbol, condition, numPrice, {
+        isArmed,
+        label: isArmed ? "ARMED ORDER" : undefined,
+      });
       setPrice("");
     }
   };
@@ -47,8 +60,14 @@ function AlertsPanel({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-2 py-1.5 border-b text-[10px] uppercase tracking-wider" style={{ borderColor: theme.border, color: theme.dim }}>
-        Price Alerts
+      <div
+        className="px-2 py-1.5 border-b text-[10px] uppercase tracking-wider flex items-center justify-between"
+        style={{ borderColor: theme.border, color: theme.dim }}
+      >
+        <span>Price Alerts</span>
+        <span className="text-[9px] font-mono" style={{ color: theme.yellow }}>
+          {activeAlerts.length} Active
+        </span>
       </div>
 
       <div className="p-2 border-b space-y-2" style={{ borderColor: theme.border }}>
@@ -75,6 +94,24 @@ function AlertsPanel({
           >
             Below
           </button>
+          <button
+            type="button"
+            onClick={() => setIsArmed((prev) => !prev)}
+            className="px-2 py-1 rounded text-[10px] font-mono transition-colors flex items-center gap-1"
+            style={{
+              borderColor: isArmed ? theme.green : theme.border,
+              background: isArmed ? `${theme.green}20` : "transparent",
+              color: isArmed ? theme.green : theme.dim,
+              border: `1px solid ${isArmed ? theme.green : theme.border}`,
+            }}
+            title={
+              isArmed
+                ? "Armed Alert: plays 'Order Filled' audio chime on trigger"
+                : "Standard Alert: plays standard two-tone chime. Click to enable Armed 'Order Filled' sound."
+            }
+          >
+            <span>{isArmed ? "⚡ Armed" : "♪ Chime"}</span>
+          </button>
         </div>
         <div className="flex gap-1">
           <input
@@ -88,9 +125,12 @@ function AlertsPanel({
           <button
             onClick={handleAdd}
             className="px-3 py-1 rounded text-[10px] font-medium"
-            style={{ background: theme.yellow, color: theme.bg }}
+            style={{
+              background: isArmed ? theme.green : theme.yellow,
+              color: theme.bg,
+            }}
           >
-            Add
+            {isArmed ? "Arm" : "Add"}
           </button>
         </div>
       </div>
@@ -102,10 +142,52 @@ function AlertsPanel({
           </div>
         )}
         {activeAlerts.map((alert) => (
-          <div key={alert.id} className="px-2 py-1.5 border-b flex items-center justify-between" style={{ borderColor: `${theme.border}50` }}>
-            <div>
-              <div className="text-[11px]" style={{ color: theme.text }}>
-                {alert.symbol} {alert.condition === "above" ? "≥" : "≤"} ${alert.price.toLocaleString()}
+          <div
+            key={alert.id}
+            className="px-2 py-1.5 border-b flex items-center justify-between"
+            style={{ borderColor: `${theme.border}50` }}
+          >
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-medium" style={{ color: theme.text }}>
+                  {alert.symbol} {alert.condition === "above" ? "≥" : "≤"} ${alert.price.toLocaleString()}
+                </span>
+                {alert.isArmed ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleArmed?.(alert.id)}
+                    className="text-[9px] px-1 py-0.2 rounded font-mono font-bold hover:opacity-80 transition-opacity"
+                    style={{
+                      background: `${theme.green}20`,
+                      color: theme.green,
+                      border: `1px solid ${theme.green}50`,
+                    }}
+                    title="Armed alert: plays 'Order Filled' audio on trigger. Click to toggle to standard chime."
+                  >
+                    ⚡ ARMED
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onToggleArmed?.(alert.id)}
+                    className="text-[9px] px-1 py-0.2 rounded font-mono hover:opacity-80 transition-opacity"
+                    style={{
+                      color: theme.dim,
+                      border: `1px solid ${theme.border}80`,
+                    }}
+                    title="Standard alert: plays synthesizer chime. Click to toggle to Armed 'Order Filled' sound."
+                  >
+                    ♪ Chime
+                  </button>
+                )}
+                {alert.label && (
+                  <span
+                    className="text-[9px] px-1 py-0.2 rounded font-mono"
+                    style={{ background: `${theme.yellow}18`, color: theme.yellow }}
+                  >
+                    {alert.label}
+                  </span>
+                )}
               </div>
               <div className="text-[9px]" style={{ color: theme.dim }}>
                 {new Date(alert.createdAt).toLocaleTimeString()}
@@ -122,11 +204,19 @@ function AlertsPanel({
         ))}
         {triggeredAlerts.length > 0 && (
           <div className="px-2 py-1 border-b" style={{ borderColor: theme.border }}>
-            <div className="text-[9px] uppercase tracking-wider" style={{ color: theme.dim }}>Triggered</div>
+            <div className="text-[9px] uppercase tracking-wider" style={{ color: theme.dim }}>
+              Triggered
+            </div>
             {triggeredAlerts.slice(0, 5).map((alert) => (
               <div key={alert.id} className="py-1 flex items-center justify-between">
-                <span className="text-[10px]" style={{ color: theme.yellow }}>
-                  {alert.symbol} {alert.condition === "above" ? "≥" : "≤"} ${alert.price.toLocaleString()}
+                <span className="text-[10px] flex items-center gap-1.5" style={{ color: alert.isArmed ? theme.green : theme.yellow }}>
+                  {alert.isArmed && <span>⚡</span>}
+                  <span>
+                    {alert.symbol} {alert.condition === "above" ? "≥" : "≤"} ${alert.price.toLocaleString()}
+                  </span>
+                  {alert.label && (
+                    <span className="text-[8.5px] opacity-80 font-mono">({alert.label})</span>
+                  )}
                 </span>
                 <button
                   onClick={() => onRemoveAlert(alert.id)}
@@ -137,7 +227,7 @@ function AlertsPanel({
                 </button>
               </div>
             ))}
-</div>
+          </div>
         )}
       </div>
 
@@ -163,6 +253,22 @@ function AlertsPanel({
         >
           {prefs.sound ? "♪ ON" : "♪ OFF"}
         </button>
+
+        {onTestSound && (
+          <button
+            onClick={() => onTestSound("order_filled")}
+            disabled={!prefs.sound}
+            className="text-[9px] px-1.5 py-0.5 rounded border hover:opacity-70 font-mono transition-opacity"
+            style={{
+              borderColor: theme.border,
+              color: prefs.sound ? theme.yellow : theme.dim,
+              opacity: prefs.sound ? 1 : 0.35,
+            }}
+            title="Test 'Order Filled' sound for armed alerts"
+          >
+            ▶ Test
+          </button>
+        )}
 
         <button
           onClick={async () => {

@@ -42,7 +42,12 @@ export interface DayTraderPanelProps {
   timeframe: string;
   onSelectSymbol: (symbol: string) => void;
   onSelectTimeframe: (tf: string) => void;
-  onAddAlert?: (symbol: string, condition: "above" | "below", price: number) => void;
+  onAddAlert?: (
+    symbol: string,
+    condition: "above" | "below",
+    price: number,
+    options?: { isArmed?: boolean; label?: string }
+  ) => void;
 }
 
 function fmtPrice(p: number): string {
@@ -301,14 +306,20 @@ export default function DayTraderPanel({
     [symbol, timeframe, onSelectSymbol, onSelectTimeframe, horizon]
   );
 
-  // Action: Arm both Target and Stop-Loss Alerts in useAlerts
+  // Action: Arm both Target and Stop-Loss Alerts in useAlerts (triggers "Order Filled" audio on hit)
   const handleArmAlerts = useCallback(
     (sig: TraderSignal) => {
       if (!onAddAlert) return;
       const tpCond = sig.direction === "LONG" ? "above" : "below";
       const slCond = sig.direction === "LONG" ? "below" : "above";
-      onAddAlert(sig.symbol, tpCond, Number(sig.targetPrice.toFixed(2)));
-      onAddAlert(sig.symbol, slCond, Number(sig.stopPrice.toFixed(2)));
+      onAddAlert(sig.symbol, tpCond, Number(sig.targetPrice.toFixed(2)), {
+        isArmed: true,
+        label: `${sig.strategyId.toUpperCase()} TP`,
+      });
+      onAddAlert(sig.symbol, slCond, Number(sig.stopPrice.toFixed(2)), {
+        isArmed: true,
+        label: `${sig.strategyId.toUpperCase()} SL`,
+      });
       setArmedIds((prev) => ({ ...prev, [sig.id]: true }));
       setTimeout(() => {
         setArmedIds((prev) => ({ ...prev, [sig.id]: false }));

@@ -12,6 +12,8 @@ export interface PriceAlert {
   active: boolean;
   triggered: boolean;
   createdAt: number;
+  label?: string;
+  isArmed?: boolean;
 }
 
 const STORAGE_KEY = "btc-terminal:alerts";
@@ -30,6 +32,8 @@ export function useAlerts(explicitPrice?: number) {
   const [showNotification, setShowNotification] = useState<PriceAlert | null>(null);
   const [prefs, setPrefs] = useState<AlertPrefs>(DEFAULT_PREFS);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const loadingAudioRef = useRef(false);
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
   const prefsRef = useRef(prefs);
@@ -48,7 +52,15 @@ export function useAlerts(explicitPrice?: number) {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          setAlerts(parsed.filter((a) => a && typeof a.price === "number"));
+          setAlerts(
+            parsed
+              .filter((a) => a && typeof a.price === "number")
+              .map((a) => ({
+                ...a,
+                isArmed: Boolean(a.isArmed),
+                label: typeof a.label === "string" ? a.label : undefined,
+              }))
+          );
         }
       }
       const rawPrefs = window.localStorage.getItem(PREFS_KEY);
@@ -85,6 +97,25 @@ export function useAlerts(explicitPrice?: number) {
     setPrefs((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // Pre-load and decode order-filled.mp3 into AudioBuffer for zero-latency playback
+  const loadOrderFilledAudio = useCallback(async (ctx: AudioContext): Promise<AudioBuffer | null> => {
+    if (audioBufferRef.current) return audioBufferRef.current;
+    if (loadingAudioRef.current) return null;
+    loadingAudioRef.current = true;
+    try {
+      const res = await fetch("/sounds/order-filled.mp3");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      audioBufferRef.current = decoded;
+      return decoded;
+    } catch {
+      return null;
+    } finally {
+      loadingAudioRef.current = false;
+    }
+  }, []);
+
   /**
    * Browsers block audio until the page has been interacted with. Returns false
    * so the UI can prompt instead of silently producing no sound.
@@ -97,11 +128,15 @@ export function useAlerts(explicitPrice?: number) {
       if (audioContextRef.current.state === "suspended") {
         void audioContextRef.current.resume();
       }
+      // Pre-warm the armed alert Order Filled sound buffer in memory
+      if (audioContextRef.current && !audioBufferRef.current) {
+        void loadOrderFilledAudio(audioContextRef.current);
+      }
       return audioContextRef.current.state !== "suspended";
     } catch {
       return false;
     }
-  }, []);
+  }, [loadOrderFilledAudio]);
 
   const playAlertSound = useCallback(() => {
     try {
@@ -135,6 +170,47 @@ export function useAlerts(explicitPrice?: number) {
       /* autoplay blocked or no audio device */
     }
   }, [prefs.volume]);
+
+  // Audio voice chime specifically for armed trade alerts ("Order filled")
+  const playOrderFilledSound = useCallback(async () => {
+    try {
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+        if (ctx.state === "suspended") return;
+      }
+
+      let buffer = audioBufferRef.current;
+      if (!buffer) {
+        buffer = await loadOrderFilledAudio(ctx);
+      }
+
+      if (buffer) {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(Math.max(0.0001, prefs.volume), ctx.currentTime);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        source.start(0);
+        return;
+      }
+
+      // Fallback: If AudioContext decode fails, attempt standard HTMLAudioElement
+      if (typeof Audio !== "undefined") {
+        const audio = new Audio("/sounds/order-filled.mp3");
+        audio.volume = Math.max(0, Math.min(1, prefs.volume));
+        void audio.play().catch(() => playAlertSound());
+        return;
+      }
+
+      // Fallback to two-tone chime
+      playAlertSound();
+    } catch {
+      playAlertSound();
+    }
+  }, [loadOrderFilledAudio, playAlertSound, prefs.volume]);
 
   const requestDesktopNotification = useCallback(async (): Promise<boolean> => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -173,8 +249,12 @@ export function useAlerts(explicitPrice?: number) {
       const formattedPrice = alert.price.toLocaleString("en-US", {
         maximumFractionDigits: alert.price < 1 ? 4 : 2,
       });
-      new Notification(`PRICE ALERT: ${symbolLabel}`, {
-        body: `${symbolLabel} reached ${op} $${formattedPrice}`,
+      const title = alert.isArmed
+        ? `⚡ ORDER FILLED: ${symbolLabel}`
+        : `PRICE ALERT: ${symbolLabel}`;
+      const prefix = alert.label ? `[${alert.label}] ` : "";
+      new Notification(title, {
+        body: `${prefix}${symbolLabel} reached ${op} $${formattedPrice}`,
         icon: "/icon.svg",
       });
     } catch {
@@ -220,7 +300,14 @@ export function useAlerts(explicitPrice?: number) {
       if (triggeredAlerts.length === 0) return;
 
       const hit = triggeredAlerts[0];
-      if (prefsRef.current.sound) playAlertSound();
+      const hasArmed = triggeredAlerts.some((a) => a.isArmed);
+      if (prefsRef.current.sound) {
+        if (hasArmed) {
+          void playOrderFilledSound();
+        } else {
+          playAlertSound();
+        }
+      }
       if (prefsRef.current.desktop) spawnDesktopNotification(hit);
       setShowNotification({ ...hit, triggered: true });
 
@@ -239,22 +326,50 @@ export function useAlerts(explicitPrice?: number) {
     });
 
     return unsubscribe;
-  }, [explicitPrice, playAlertSound, spawnDesktopNotification]);
+  }, [explicitPrice, playAlertSound, playOrderFilledSound, spawnDesktopNotification]);
 
-  const addAlert = useCallback((symbol: string, condition: "above" | "below", price: number) => {
-    setAlerts((prev) => [
-      {
-        id: Date.now() + Math.random(),
-        symbol,
-        condition,
-        price,
-        active: true,
-        triggered: false,
-        createdAt: Date.now(),
-      },
-      ...prev,
-    ]);
+  const addAlert = useCallback(
+    (
+      symbol: string,
+      condition: "above" | "below",
+      price: number,
+      options?: { isArmed?: boolean; label?: string }
+    ) => {
+      setAlerts((prev) => [
+        {
+          id: Date.now() + Math.random(),
+          symbol,
+          condition,
+          price,
+          active: true,
+          triggered: false,
+          createdAt: Date.now(),
+          isArmed: options?.isArmed ?? false,
+          label: options?.label,
+        },
+        ...prev,
+      ]);
+    },
+    []
+  );
+
+  const toggleAlertArmed = useCallback((id: number) => {
+    setAlerts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, isArmed: !a.isArmed } : a))
+    );
   }, []);
+
+  const testSound = useCallback(
+    (type: "chime" | "order_filled" = "order_filled") => {
+      primeAudio();
+      if (type === "order_filled") {
+        void playOrderFilledSound();
+      } else {
+        playAlertSound();
+      }
+    },
+    [primeAudio, playOrderFilledSound, playAlertSound]
+  );
 
   const removeAlert = useCallback((id: number) => {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
@@ -265,12 +380,16 @@ export function useAlerts(explicitPrice?: number) {
   return {
     alerts,
     addAlert,
+    toggleAlertArmed,
     removeAlert,
     showNotification,
     dismissNotification,
     prefs,
     updatePrefs,
     primeAudio,
+    testSound,
+    playAlertSound,
+    playOrderFilledSound,
     requestDesktopNotification,
   };
 }

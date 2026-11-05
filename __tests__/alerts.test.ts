@@ -8,6 +8,8 @@ interface PriceAlert {
   price: number;
   active: boolean;
   triggered: boolean;
+  isArmed?: boolean;
+  label?: string;
 }
 
 interface MarketStateSnapshot {
@@ -186,5 +188,42 @@ describe("per-symbol alert evaluation", () => {
 
     const hits = evaluateAlerts(alerts, snapshot);
     expect(hits).toHaveLength(0);
+  });
+
+  it("distinguishes armed trade alerts (isArmed: true) with order filled metadata", () => {
+    const alerts: PriceAlert[] = [
+      {
+        id: 201,
+        symbol: "BTC/USDT",
+        condition: "above",
+        price: 95000,
+        active: true,
+        triggered: false,
+        isArmed: true,
+        label: "ORB TP",
+      },
+      {
+        id: 202,
+        symbol: "BTC/USDT",
+        condition: "below",
+        price: 91000,
+        active: true,
+        triggered: false,
+        isArmed: false,
+      },
+    ];
+
+    const snapshot: MarketStateSnapshot = {
+      symbol: "BTCUSDT",
+      price: 95500,
+      tickers: { BTCUSDT: 95500 },
+    };
+
+    const hits = evaluateAlerts(alerts, snapshot);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].id).toBe(201);
+    expect(hits[0].isArmed).toBe(true);
+    expect(hits[0].label).toBe("ORB TP");
+    expect(hits[0].triggered).toBe(true);
   });
 });

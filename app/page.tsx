@@ -275,12 +275,14 @@ export default function Home() {
   const {
     alerts,
     addAlert,
+    toggleAlertArmed,
     removeAlert,
     showNotification,
     dismissNotification,
     prefs,
     updatePrefs,
     primeAudio,
+    testSound,
     requestDesktopNotification,
   } = useAlerts();
 
@@ -368,10 +370,12 @@ export default function Home() {
             alerts={alerts}
             symbol={selectedSymbol}
             onAddAlert={addAlert}
+            onToggleArmed={toggleAlertArmed}
             onRemoveAlert={removeAlert}
             prefs={prefs}
             onPrefsChange={updatePrefs}
             onEnableSound={primeAudio}
+            onTestSound={testSound}
             onRequestDesktopNotification={requestDesktopNotification}
           />
         );
@@ -430,10 +434,12 @@ export default function Home() {
             alerts={alerts}
             symbol={selectedSymbol}
             onAddAlert={addAlert}
+            onToggleArmed={toggleAlertArmed}
             onRemoveAlert={removeAlert}
             prefs={prefs}
             onPrefsChange={updatePrefs}
             onEnableSound={primeAudio}
+            onTestSound={testSound}
             onRequestDesktopNotification={requestDesktopNotification}
           />
         );
@@ -617,10 +623,12 @@ export default function Home() {
               alerts={alerts}
               symbol={selectedSymbol}
               onAddAlert={addAlert}
+              onToggleArmed={toggleAlertArmed}
               onRemoveAlert={removeAlert}
               prefs={prefs}
               onPrefsChange={updatePrefs}
               onEnableSound={primeAudio}
+              onTestSound={testSound}
               onRequestDesktopNotification={requestDesktopNotification}
             />
           </div>
