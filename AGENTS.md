@@ -48,11 +48,12 @@ components/
 │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
 │   ├── useLiquidationMarkers.ts # Real-time perpetual liquidation markers (Spec 013)
 │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag, undo/redo
+├── DayTraderPanel.tsx      # Day Trader Desk: 6 Pine-style setup detectors + Hybrid Time Machine simulator
 ├── OrderBook.tsx           # Bid/ask ladder
 ├── TradeTape.tsx           # Time & sales
 ├── LiquidationsTape.tsx    # Live perpetual liquidation feed (!forceOrder@arr)
-├── AlertsPanel.tsx         # Price alerts (persisted)
-├── AlertNotification.tsx   # Toast for triggered alerts
+├── AlertsPanel.tsx         # Price alerts with Armed vs. Standard toggles & audio test
+├── AlertNotification.tsx   # Toast for triggered alerts & Order Filled banners
 ├── ExchangePanel.tsx       # Per-exchange prices, aggregation, spread
 ├── MarketHeatmapPanel.tsx  # 24h volume-weighted crypto treemap status widget
 ├── EconomicCalendarPanel.tsx # High-impact macro calendar events
@@ -66,11 +67,13 @@ context/
 └── ThemeContext.tsx        # 15-color theme, presets, localStorage persistence
 hooks/
 ├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + klines + universe !miniTicker@arr
-└── useAlerts.ts            # Per-symbol alert evaluation, sound, browser Notification API, persistence
+├── useAlerts.ts            # Per-symbol alert evaluation, sound ("Order filled" / chime), desktop API, persistence
+└── useVisibilityPolling.ts # Background-tab polling throttling & power optimization (Spec 017)
 lib/
 ├── types.ts                # Candle, Trade, OrderBookEntry, WatchlistItem
 ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)
 ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
+├── traderEngine.ts         # 6 Pine-style setup detectors (ORB, AMD, SQZ, MRV, FLG, SWP) + Time Machine quant models
 ├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
 ├── newsTags.ts             # Headline tagging (UNIVERSE assets + ETF/SEC/MACRO)
 ├── marketStore.ts          # Reactive market state store (useSyncExternalStore + rAF batching)
@@ -80,16 +83,21 @@ lib/
 ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
 ├── sessions.ts             # Global market sessions schedule, two-pass zoned→UTC, wrap segments & DST engine
 └── links.ts                # Canonical repository links
+public/
+└── sounds/
+    └── order-filled.mp3    # Institutional voice telemetry chime for armed TP/SL execution
 __tests__/                  # Unit test suite with Vitest (Spec 014)
 ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
 ├── indicators.test.ts      # SMA, EMA, RSI, MACD, Bollinger, Stoch RSI
+├── traderEngine.test.ts    # Setup detection, signal validation, Monte Carlo / Backtest quant models
 ├── heikenAshi.test.ts      # Heikin Ashi OHLC smoothing
 ├── newsTags.test.ts        # News categorization and asset tagging
 ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
-├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates, armed metadata
 ├── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
 ├── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
-└── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
+├── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
+└── visibilityPolling.test.ts # Background tab document visibility listener lifecycle
 ```
 
 ## Notable Constraints
@@ -204,6 +212,23 @@ __tests__/                  # Unit test suite with Vitest (Spec 014)
   (`layout.panes.enableResize`, themed with `separatorColor` / `separatorHoverColor`).
   `chartEpoch` is bumped when the chart is (re)created so the structural effect
   rebuilds against the fresh instance; `paneRefs` is cleared in the chart teardown.
+- **Crosshair free-floating & explicit OHLC magnet.** Crosshair defaults to
+  `CrosshairMode.Normal`, allowing perpendicular horizontal/vertical axis guides
+  to float freely across the canvas without sticking or magnet-snapping to candle
+  wicks. Toggling the 🧲 button in the drawing rail or header switches the crosshair
+  mode to `CrosshairMode.MagnetOHLC` for pixel-perfect anchor snapping to candle
+  Open/High/Low/Close levels. Pointer leave clears crosshair artifacts immediately.
+- **Armed trade alerts & "Order filled" voice telemetry.** Alerts support
+  `isArmed?: boolean` and `label?: string`. Clicking "Arm TP/SL" in `DayTraderPanel`
+  flags Take Profit and Stop Loss alerts as armed. When an armed alert triggers,
+  `useAlerts` plays `public/sounds/order-filled.mp3` pre-decoded into memory via
+  `AudioContext.decodeAudioData` (zero latency, background-tab continuous, honoring
+  `prefs.volume`). Unarmed/standard alerts continue playing the two-tone synthesizer chime.
+  Users can toggle armed state and preview the sound directly from `AlertsPanel`.
+- **Unified exchange feed routing (Binance, Bybit, OKX).** The top MarketStats
+  and CommandBar provide a single-authority Feed Source selector (`BINANCE | BYBIT | OKX`).
+  Selecting a feed coordinates spot and linear perpetual data across ticker APIs, klines,
+  L2 order books, trade feeds, and tactical scanner calculations with 100% price synchronization.
 - **Drawings and magnet are gated to pane 0.** In v5 a crosshair move over a
   sub-pane still fires `subscribeCrosshairMove` with chart-relative coordinates, so
   `onCrosshairMove` / `onClick` check `(param.paneIndex ?? 0) === 0` before

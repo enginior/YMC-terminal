@@ -37,6 +37,14 @@ This document outlines the **Update Phase**: a structured catalog of UX/UI enhan
 | **Heatmap** | Crypto Market Treemap / Heatmap Widget (below News) | High | Medium | **P4** | ✅ Completed |
 | **Architecture**| Reactive Tick Store / Isolation (Prevent Root Re-renders) | High | High | **P4** | ✅ Completed |
 | **News/Macro** | Symbol-Specific News Filtering & Calendar Impact Filter | Medium | Low | **P4** | ✅ Completed |
+| **Tactical Desk** | Day Trader Desk & Multi-Timeframe Scanner (BTC & Gold) | High | High | **P0** | ✅ Completed (v0.3.0) |
+| **Quant Engine** | 6 Deterministic Pine-Style Setup Detectors (ORB, AMD, SQZ, MRV, FLG, SWP) | High | High | **P0** | ✅ Completed (v0.3.0) |
+| **Quant Engine** | Hybrid Time Machine Simulator (Backtest, 10b Vector Analogs, 2500 Monte Carlo) | High | High | **P0** | ✅ Completed (v0.3.0) |
+| **Exchanges** | Tri-Exchange Live Routing (Binance, Bybit, OKX) with Single-Authority Feed Switch | High | Medium | **P1** | ✅ Completed (v0.3.0–v0.3.1) |
+| **Charting** | Free-Floating TradingView Crosshair (`Normal`) & Explicit OHLC Magnet (`MagnetOHLC`) | High | Low | **P1** | ✅ Completed (v0.3.1) |
+| **Audio Alert** | Armed Trade Alert "Order Filled" Voice Audio Telemetry (`order-filled.mp3`) | Medium | Low | **P1** | ✅ Completed (v0.3.2) |
+| **UI/UX** | Collapsible Secondary Workspace Panels & 50/50 Split-Screen Maximizer | Medium | Low | **P2** | ✅ Completed (v0.3.1) |
+| **Documentation** | KaTeX $\LaTeX$ Mathematical Formulas & Variable Breakdown Legends | Medium | Low | **P2** | ✅ Completed (v0.3.2) |
 
 ---
 
@@ -214,6 +222,85 @@ As a perpetual derivatives workstation, YMC Terminal requires specialized deriva
 
 ---
 
+### 3.8 Day Trader Desk & Pine-Style Quantitative Engine (v0.3.0)
+
+1. **Multi-Timeframe Tactical Setup Scanner**
+   - Focus assets: Bitcoin (`BTC/USDT`) and Gold (`XAU/USDT` via `PAXGUSDT`).
+   - Timeframe intervals: `5m`, `15m`, `1h`, `4h`.
+   - Real-time scanner evaluating 6 institutional setup detectors on incoming candle closes:
+     - **ORB (Opening Range Breakout):** Identifies initial range expansion outside the opening session boundaries with volume confirmation:
+       $$\text{ORB}_{\text{Long}} = C_t > \text{OR}_{\text{High}} \quad\text{and}\quad V_t > 1.3 \cdot \text{SMA}(V, 20)$$
+     - **ICT AMD (Power of 3):** Models market manipulation cycles — Accumulation range coiling, Judas Swing stop-hunt raid, followed by aggressive displacement in the true directional trend:
+       $$\text{Judas Swing}_{\text{Bull}} = L_t < \text{Range}_{\text{Low}} \quad\text{and}\quad C_t > \text{Range}_{\text{Low}} + 0.35 \cdot (\text{Range}_{\text{High}} - \text{Range}_{\text{Low}})$$
+     - **BB Squeeze (SQZ):** Detects historical volatility contraction (Bollinger Bandwidth $\le 25\text{th percentile}$) followed by directional breakout expansion:
+       $$\text{Bandwidth} = \frac{\text{Upper}_{\text{BB}} - \text{Lower}_{\text{BB}}}{\text{SMA}(C, 20)} \le \text{Threshold}_{\text{25th}}$$
+     - **Mean-Reversion Extremes (MRV):** Pins statistically overstretched price action piercing $2\sigma$ outer bands accompanied by extreme momentum exhaustion and long rejection wicks:
+       $$\text{MRV}_{\text{Long}} = L_t \le \text{Lower}_{\text{BB}} \quad\text{and}\quad \text{RSI}(14) \le 30 \quad\text{and}\quad \text{Wick}_{\text{Lower}} \ge 0.35 \cdot (H_t - L_t)$$
+     - **Trend Pullback Flag (FLG):** Captures high-expectancy trend continuation entries into dynamic support/resistance value zones ($EMA_{20}$ dynamic mean) in stacked directional trends:
+       $$\text{FLG}_{\text{Bull}} = C_t > \text{EMA}_{50} \quad\text{and}\quad \text{Low}_t \le \text{EMA}_{20} \quad\text{and}\quad C_t \ge \text{EMA}_{20}$$
+     - **Liquidity Sweep Reversal (SWP):** Detects institutional stop-runs beyond 15-bar structural swing highs or swing lows with immediate reclaim:
+       $$\text{Sweep}_{\text{Bull}} = \min(L_t, L_{t-1}) < \min_{i=1\dots15}(L_{t-i}) \quad\text{and}\quad C_t > \min_{i=1\dots15}(L_{t-i})$$
+
+2. **1-Click Chart Projection & Alert Arming**
+   - Clicking **"Plot Setup"** generates a standard Long/Short Position drawing box on the main `PriceChart` canvas with entry, target, and stop loss coordinates.
+   - Clicking **"Arm TP/SL"** inserts armed price thresholds into the active alert engine with automatic "Order filled" voice telemetry.
+
+---
+
+### 3.9 Hybrid Time Machine Simulation Suite (v0.3.0)
+
+1. **3-Pillar Quantitative Simulation Architecture**
+   - **Pillar 1: Historical Strategy Backtest (45% Weight):**
+     Evaluates signal performance across the preceding 100 historical bars, computing empirical win rate ($\mathcal{W}$), Profit Factor ($PF$), and mathematical expectancy ($\mathbb{E}[R]$):
+     $$\mathbb{E}[R] = (W \times R) - ((1 - W) \times 1.0)$$
+   - **Pillar 2: 10-Bar Vector Pattern Analogs (30% Weight):**
+     Extracts an 11-dimensional normalized vector (10 normalized price returns + RSI momentum delta) and performs Euclidean nearest-neighbor search across historical price action to isolate the top 25 historical structural twins:
+     $$D(\mathbf{u}, \mathbf{v}) = \sqrt{\sum_{k=1}^{11} (u_k - v_k)^2}$$
+   - **Pillar 3: Monte Carlo Bootstrap Resampling (25% Weight):**
+     Generates 2,500 synthetic forward paths over 24 projection intervals by resampling historical return distributions and intrabar wick expansions:
+     $$S_{t+\Delta t} = S_t \cdot \exp\left(\left(\mu - \frac{1}{2}\sigma^2\right)\Delta t + \sigma \sqrt{\Delta t} \cdot Z_t\right)$$
+   - **Composite Bayesian Expectancy Model:**
+     Combines all three pillars into an institutional confidence probability:
+     $$P_{\text{win}} = 0.45 \cdot \mathcal{W}_{\text{Backtest}} + 0.30 \cdot \mathcal{W}_{\text{Analogs}} + 0.25 \cdot \mathcal{W}_{\text{MonteCarlo}}$$
+
+---
+
+### 3.10 Tri-Exchange Single-Authority Feed Routing (v0.3.0–v0.3.1)
+
+1. **Multi-Venue Coordination**
+   - Direct integration of **Binance**, **Bybit**, and **OKX** spot and linear perpetual data feeds.
+   - User-selectable single-authority toggle (`BINANCE | BYBIT | OKX`) in `CommandBar` and `MarketStats`.
+   - Guaranteed 100% price synchronization across ticker stats, historical candlesticks, L2 depth ladders, real-time trade tape, and quantitative scanner calculations.
+
+---
+
+### 3.11 Free-Floating TradingView Crosshair & Explicit OHLC Magnet (v0.3.1)
+
+1. **Cursor Physics Separation**
+   - Default mode set to `CrosshairMode.Normal`: perpendicular horizontal and vertical cursor guide lines track mouse coordinates smoothly across the canvas without magnet-snapping to candle wicks.
+   - Explicit 🧲 toggle activates `CrosshairMode.MagnetOHLC` for pixel-perfect anchor snapping to candle Open, High, Low, or Close levels when precision drawing is required.
+   - Instant visual cleanup on pointer leave to eliminate lingering crosshair artifacts.
+
+---
+
+### 3.12 Armed Trade Alerts & "Order Filled" Voice Telemetry (v0.3.2)
+
+1. **Institutional Execution Audio Telemetry**
+   - Differentiates between casual price alerts (standard synthetic two-tone chime) and active tactical trade orders (armed Take Profit / Stop Loss thresholds).
+   - High-fidelity **"Order filled"** voice sound clip (`public/sounds/order-filled.mp3`) pre-decoded directly into audio memory via Web Audio API (`AudioContext.decodeAudioData`).
+   - Zero-latency trigger execution that functions continuously even in background browser tabs.
+   - Interactive armed badge toggles (`⚡ ARMED`), manual test sound preview, and high-contrast alert toast banners.
+
+---
+
+### 3.13 Mathematical Formulations & KaTeX Typography (v0.3.2)
+
+1. **Institutional Mathematical Notation**
+   - Replacement of plain-text ASCII code representations with standard KaTeX $\LaTeX$ typesetting throughout the documentation and about page.
+   - Comprehensive variable breakdown legends explaining every parameter ($\mu, \sigma, Z_t, \mathbb{E}[R], PF, \mathcal{W}$) in clear, accessible language.
+
+---
+
 ## 4. Implementation Phasing Roadmap
 
 ```mermaid
@@ -241,7 +328,15 @@ flowchart TD
         D3 --> D4["News & Calendar Tag Filtering"]
     end
 
-    Phase 1 --> Phase 2 --> Phase 3 --> Phase 4
+    subgraph Phase 5: Quantitative Strategy Engine & Audio Telemetry (v0.3.0–v0.3.2)
+        E1["Day Trader Desk & 6 Pine Detectors"] --> E2["Hybrid Time Machine Simulator"]
+        E2 --> E3["Tri-Exchange Feed Routing (Binance/Bybit/OKX)"]
+        E3 --> E4["Free-Floating Crosshair & Magnet Toggle"]
+        E4 --> E5["Armed Alert 'Order Filled' Audio Telemetry"]
+        E5 --> E6["LaTeX Math Formulations & Variable Breakdown"]
+    end
+
+    Phase 1 --> Phase 2 --> Phase 3 --> Phase 4 --> Phase 5
 ```
 
 ---

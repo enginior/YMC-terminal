@@ -50,11 +50,12 @@ ymc-terminal/
 │   │   ├── useIndicatorPanes.ts# Indicator calculation, v5 native sub-panes lifecycle, bands
 │   │   ├── useLiquidationMarkers.ts # Real-time perpetual liquidation markers (Spec 013)
 │   │   └── useDrawings.ts      # Canvas drawings primitive, magnet snap, hit-testing, selection, drag, undo/redo
+│   ├── DayTraderPanel.tsx      # Day Trader Desk: 6 Pine-style setup detectors + Hybrid Time Machine simulator
 │   ├── OrderBook.tsx           # Bid/ask ladder
 │   ├── TradeTape.tsx           # Time & sales
 │   ├── LiquidationsTape.tsx    # Live perpetual liquidation feed (!forceOrder@arr)
-│   ├── AlertsPanel.tsx         # Price alerts (persisted)
-│   ├── AlertNotification.tsx   # Toast for triggered alerts
+│   ├── AlertsPanel.tsx         # Price alerts with Armed vs. Standard toggles & audio test
+│   ├── AlertNotification.tsx   # Toast for triggered alerts & Order Filled banners
 │   ├── ExchangePanel.tsx       # Per-exchange prices, aggregation, spread
 │   ├── MarketHeatmapPanel.tsx  # 24h volume-weighted crypto treemap status widget
 │   ├── EconomicCalendarPanel.tsx # High-impact macro calendar events
@@ -68,11 +69,13 @@ ymc-terminal/
 │   └── ThemeContext.tsx        # 15-color theme, presets, saved palettes
 ├── hooks/
 │   ├── useMultiExchangeData.ts # Binance/Coinbase/OKX/Bybit sockets + klines + universe !miniTicker@arr
-│   └── useAlerts.ts            # Per-symbol alert evaluation, sound, browser Notification API, persistence
+│   ├── useAlerts.ts            # Per-symbol alert evaluation, sound ("Order filled" / chime), desktop API, persistence
+│   └── useVisibilityPolling.ts # Background-tab polling throttling & power optimization (Spec 017)
 ├── lib/
 │   ├── types.ts                # Candle, Trade, OrderBookEntry, WatchlistItem
 │   ├── symbols.ts              # Label <-> exchange symbol mapping (GOLD/USDT -> PAXGUSDT)
 │   ├── indicators.ts           # SMA, EMA, RSI, MACD, Bollinger Bands, Stoch RSI
+│   ├── traderEngine.ts         # 6 Pine-style setup detectors (ORB, AMD, SQZ, MRV, FLG, SWP) + Time Machine quant models
 │   ├── heikenAshi.ts           # Heikin Ashi OHLC smoothing calculation
 │   ├── newsTags.ts             # Headline tagging (UNIVERSE assets + ETF/SEC/MACRO)
 │   ├── marketStore.ts          # Reactive market state store (useSyncExternalStore + rAF batching)
@@ -82,16 +85,21 @@ ymc-terminal/
 │   ├── drawings.ts             # Level / trend / box / ruler / ray / fib / channel / position drawings, series primitive
 │   ├── sessions.ts             # Global market sessions schedule, IANA timezone conversion & DST engine
 │   └── links.ts                # Canonical repository links
+├── public/
+│   └── sounds/
+│       └── order-filled.mp3    # Institutional voice telemetry chime for armed TP/SL execution
 ├── __tests__/                  # Unit test suite with Vitest (Spec 014)
 │   ├── symbols.test.ts         # Symbol mapping, pair labels, exchange conversions
 │   ├── indicators.test.ts      # SMA, EMA, RSI, MACD, Bollinger, Stoch RSI
+│   ├── traderEngine.test.ts    # Setup detection, signal validation, Monte Carlo / Backtest quant models
 │   ├── heikenAshi.test.ts      # Heikin Ashi OHLC smoothing
 │   ├── newsTags.test.ts        # News categorization and asset tagging
 │   ├── marketStore.test.ts     # Reactive store state, selectors, notify scheduling
-│   ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates
+│   ├── alerts.test.ts          # Price alert evaluation, condition checking, trigger updates, armed metadata
 │   ├── drawings.test.ts        # Geometry, hit-testing, and delete handles for drawings
 │   ├── liquidations.test.ts    # Liquidation buffering, candle timestamp alignment, marker mapping
-│   └── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
+│   ├── sessions.test.ts        # Market session schedules, viewer local time, DST shift evaluation
+│   └── visibilityPolling.test.ts # Background tab document visibility listener lifecycle
 └── package.json
 ```
 
@@ -196,25 +204,28 @@ useAlerts    → price monitoring → AlertNotification (toast)
 - [x] Chart viewport refit + container resize handling on symbol/timeframe change
 - [x] High-impact economic calendar panel (`components/EconomicCalendarPanel.tsx`)
 
-### Phase 6: Update Phase (Perpetuals & UI/UX Evolution) 🚀
-> Full blueprint and specifications documented in [`UPDATE_PHASE.md`](./UPDATE_PHASE.md).
+### Phase 6: Perpetuals, TradingView Suite & Architecture (Specs 001–017) ✅
+- [x] Symbol-specific news filtering & macro economic calendar impact filters
+- [x] TradingView-style layout with vertical drawing rail (`DrawingRail.tsx`) and floating properties bar
+- [x] 11 advanced drawing tools with 50-step undo/redo history engine (`Ctrl+Z` / `Ctrl+Y`) and anchor dragging
+- [x] Derivatives telemetry: Open Interest (OI), Funding Rate histograms, and Cumulative Volume Delta (CVD) sub-panes
+- [x] Real-time liquidation beacon markers on PriceChart (`!forceOrder@arr`)
+- [x] Institutional Symbol Search modal (`Ctrl+K` / `/`) with asset categorization
+- [x] Configurable indicator parameters with inline modal drawers
+- [x] Forex Factory-style Global Market Sessions timeline with IANA timezone conversion & DST tracker
+- [x] Background-tab resource throttling (`useVisibilityPolling`) for CPU and bandwidth conservation
+- [x] Full unit test suite with 98 Vitest tests and GitHub Actions CI workflow
 
-- **Perpetual Derivatives Deep-Dive:**
-  - Dynamic symbol funding rate & open interest (active pair reactive)
-  - 8-hour funding settlement countdown timer & annualized APR display
-  - Real-time perpetual liquidation bursts tape (`wss://fstream.binance.com/ws/!forceOrder@arr`)
-  - Global Long/Short account ratio widget
-  - Mark Price vs. Spot Price basis spread indicator
-- **Bloomberg UI/UX & Information Density:**
-  - Keyboard hotkeys (`?` cheat sheet modal, `1`–`6` symbol select, `[`/`]` timeframes, `v`/`d`/`m` toggles)
-  - Command bar action parser (`BTC 15M`, `ALERT 75K`, `THEME MATRIX`)
-  - Panel maximize / solo focus mode (`⤢` button / `f` key)
-  - Chart percentage & delta measurement tool (Ruler)
-  - Chart image snapshot (PNG) and candle data export (CSV)
-- **Architecture & Streaming Performance:**
-  - Decouple high-frequency WebSocket ticks from root `page.tsx` state to avoid full-tree reconciliation
-  - Autoplay audio policy status & test sound button in Settings/Alerts
-  - Watchlist filtering & top-volume perpetual pairs expansion
+### Phase 7: Quantitative Strategy Engine, Multi-Exchange & Audio Telemetry (v0.3.0–v0.3.2) ✅
+- [x] **Day Trader Desk**: Dedicated multi-timeframe scanner for BTC/USDT and Gold (XAU/USDT) across 5m, 15m, 1h, and 4h intervals.
+- [x] **6 Pine-Style Setup Detectors**: Deterministic mathematical detectors for ORB, ICT AMD (Power of 3), Bollinger Squeeze, Mean Reversion Extremes, Trend Pullback Flag, and Liquidity Sweep Reversal.
+- [x] **1-Click Chart Plotting & TP/SL Arming**: Instant R:R box projection directly onto PriceChart with auto-armed Take Profit & Stop Loss alerts.
+- [x] **Hybrid Time Machine Simulator**: 3-pillar quant engine combining Strategy Backtester (45%), 10-Bar Vector Euclidean Pattern Analogs (30%), and 2,500-Path Monte Carlo Bootstrap Resampling (25%) into composite Bayesian win odds ($P_{\text{win}}$) and expectancy ($\mathbb{E}[R]$).
+- [x] **Tri-Exchange Live Routing**: Unified Feed Source switcher (`BINANCE | BYBIT | OKX`) in MarketStats and CommandBar with 100% price synchronization across ticker, chart, and order book.
+- [x] **TradingView-Style Free Floating Crosshair**: `CrosshairMode.Normal` free cursor floating with explicit `CrosshairMode.MagnetOHLC` snapping toggle (🧲 button).
+- [x] **Armed Alert Audio Telemetry**: Authentic **"Order filled"** voice sound on armed TP/SL execution, pre-decoded via `AudioContext.decodeAudioData` into memory for zero latency, with interactive Armed (`⚡ ARMED`) toggles, audio preview testing, and visual alert banners.
+- [x] **KaTeX / LaTeX Mathematical Typesetting**: Full $\LaTeX$ display equations, stop/target formulations, and plain-English parameter breakdown legends on the documentation page.
+- [x] **Collapsible Workspace Panels**: One-click collapsible side panels (OrderBook, TradeTape, Sentiment, Alerts) and 50/50 split-screen widget maximize.
 
 ## Recommendations / Potential Updates
 Deferred rather than abandoned. Ordered roughly by value per unit of effort. See [`UPDATE_PHASE.md`](./UPDATE_PHASE.md) for full breakdown.
