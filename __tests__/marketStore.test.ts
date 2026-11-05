@@ -68,6 +68,18 @@ describe("marketStore", () => {
       expect(state.candles).toEqual([]);
     });
 
+    it("supports binance, bybit, and okx unified exchangeSource across resets", () => {
+      marketStore.reset("BTCUSDT", "1h", "okx");
+      expect(marketStore.getState().exchangeSource).toBe("okx");
+
+      // Switching symbol without passing exchangeSource retains current source
+      marketStore.reset("ETHUSDT", "15m");
+      expect(marketStore.getState().exchangeSource).toBe("okx");
+
+      marketStore.reset("SOLUSDT", "4h", "bybit");
+      expect(marketStore.getState().exchangeSource).toBe("bybit");
+    });
+
     it("notifies subscribers when state changes", () => {
       let notified = false;
       const unsubscribe = marketStore.subscribe(() => {

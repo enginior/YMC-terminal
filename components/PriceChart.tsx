@@ -407,6 +407,11 @@ function PriceChart({
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
+                onPointerLeave={() => {
+                  try {
+                    chartRef.current?.clearCrosshairPosition();
+                  } catch {}
+                }}
               />
             )}
           </div>

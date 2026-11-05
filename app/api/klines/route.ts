@@ -5,6 +5,7 @@ const STATIC_ROOT = "https://finom.github.io/static-klines/api/klines";
 const BINANCE_SPOT = "https://api.binance.com/api/v3/klines";
 const BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1/klines";
 const BYBIT_KLINE = "https://api.bybit.com/v5/market/kline";
+const OKX_KLINE = "https://www.okx.com/api/v5/market/candles";
 
 const BYBIT_INTERVAL_MAP: Record<string, string> = {
   "1m": "1",
@@ -20,6 +21,29 @@ const BYBIT_INTERVAL_MAP: Record<string, string> = {
   "1w": "W",
   "1M": "M",
 };
+
+const OKX_INTERVAL_MAP: Record<string, string> = {
+  "1m": "1m",
+  "5m": "5m",
+  "15m": "15m",
+  "30m": "30m",
+  "1h": "1H",
+  "2h": "2H",
+  "4h": "4H",
+  "6h": "6H",
+  "12h": "12H",
+  "1d": "1D",
+  "1w": "1W",
+  "1M": "1M",
+};
+
+function baseAsset(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  for (const quote of ["USDT", "USDC", "BUSD", "USD"]) {
+    if (upper.endsWith(quote)) return upper.slice(0, -quote.length);
+  }
+  return upper;
+}
 
 // Intervals static-klines actually publishes, and the calendar window each file covers
 const STATIC_SUPPORTED = new Set(["15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"]);
@@ -195,6 +219,53 @@ async function fromBybit(
   return list.slice().reverse().map((row: any) => toCandle([Number(row[0]), row[1], row[2], row[3], row[4], row[5]]));
 }
 
+async function fromOkx(
+  symbol: string,
+  interval: string,
+  limit: number,
+  startTime?: number,
+  endTime?: number
+) {
+  const okxBar = OKX_INTERVAL_MAP[interval] || "1H";
+  const base = baseAsset(symbol);
+  const spotInstId = `${base}-USDT`;
+
+  const buildUrl = (instId: string) => {
+    const url = new URL(OKX_KLINE);
+    url.searchParams.set("instId", instId);
+    url.searchParams.set("bar", okxBar);
+    url.searchParams.set("limit", String(Math.min(limit, 300)));
+    // In OKX V5, `after` paginates backwards (returns records older than `after`),
+    // and `before` returns records newer than `before`.
+    if (endTime) url.searchParams.set("after", String(endTime));
+    if (startTime) url.searchParams.set("before", String(startTime));
+    return url.toString();
+  };
+
+  let res = await fetch(buildUrl(spotInstId), { cache: "no-store" });
+  let json = res.ok ? await res.json() : null;
+  let list = json?.data;
+
+  if (!Array.isArray(list) || list.length === 0) {
+    // Fallback to OKX perpetual SWAP if spot pair is unlisted
+    const swapRes = await fetch(buildUrl(`${base}-USDT-SWAP`), { cache: "no-store" });
+    if (swapRes.ok) {
+      const swapJson = await swapRes.json();
+      list = swapJson?.data;
+    }
+  }
+
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new Error("okx empty klines");
+  }
+
+  // OKX V5 returns newest-first; reverse into ascending chronological order
+  return list
+    .slice()
+    .reverse()
+    .map((row: any) => toCandle([Number(row[0]), row[1], row[2], row[3], row[4], row[5]]));
+}
+
 async function fromExchange(
   source: string,
   symbol: string,
@@ -203,11 +274,20 @@ async function fromExchange(
   startTime?: number,
   endTime?: number
 ) {
-  if (source === "bybit" && !isFuturesSymbol(symbol)) {
-    try {
-      return await fromBybit(symbol, interval, limit, startTime, endTime);
-    } catch {
-      // Fallback to Binance if Bybit fails
+  if (!isFuturesSymbol(symbol)) {
+    if (source === "okx") {
+      try {
+        return await fromOkx(symbol, interval, limit, startTime, endTime);
+      } catch {
+        // Fallback to Binance if OKX fails
+      }
+    }
+    if (source === "bybit") {
+      try {
+        return await fromBybit(symbol, interval, limit, startTime, endTime);
+      } catch {
+        // Fallback to Binance if Bybit fails
+      }
     }
   }
   return fromBinance(symbol, interval, limit, startTime, endTime);
@@ -236,6 +316,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(dedupe(candles), {
         headers: { "Cache-Control": "s-maxage=30" },
       });
+    }
+
+    // When OKX is explicitly selected for non-commodity pairs, serve pure OKX klines (paged up to 1,200 bars)
+    if (source === "okx" && !isFutures) {
+      const pages = 4;
+      const perPage = 300;
+      let endTime: number | undefined;
+      const all: ReturnType<typeof toCandle>[] = [];
+
+      for (let i = 0; i < pages; i++) {
+        try {
+          const candles = await fromOkx(symbol, interval, perPage, undefined, endTime);
+          if (candles.length === 0) break;
+          all.unshift(...candles);
+          if (candles.length < perPage) break;
+          endTime = candles[0].time * 1000;
+        } catch {
+          break;
+        }
+      }
+
+      const deduped = dedupe(all);
+      if (deduped.length > 0) {
+        return NextResponse.json(deduped, { headers: { "Cache-Control": "s-maxage=60" } });
+      }
     }
 
     // When Bybit is explicitly selected for non-commodity pairs, serve pure Bybit klines (paged up to 2,000 bars)

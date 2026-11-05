@@ -122,7 +122,7 @@ function MarketStats({
               style={{ borderColor: theme.border, background: theme.bg }}
               title="Unified data source for Top Strip, Price Chart, Order Book & Trade Tape"
             >
-              {(["binance", "bybit"] as const).map((src) => {
+              {(["binance", "bybit", "okx"] as const).map((src) => {
                 const active = exchangeSource === src;
                 return (
                   <button

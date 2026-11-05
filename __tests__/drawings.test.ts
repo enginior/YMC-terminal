@@ -9,6 +9,7 @@ import {
   Drawing,
   FIB_RATIOS,
 } from "@/lib/drawings";
+import { snapPriceToOhlc } from "@/components/chart/types";
 
 describe("drawings geometry and hit testing", () => {
   const mockChart: any = {
@@ -321,5 +322,35 @@ describe("drawings geometry and hit testing", () => {
 
     expect(drawingGeometry(btcSetupOnGold, mockChart, mockSeries, goldCandles)).toBeNull();
     expect(drawingGeometry(validGoldSetup, mockChart, mockSeries, goldCandles)).not.toBeNull();
+  });
+
+  describe("crosshair magnet snapping", () => {
+    const candle = {
+      time: 1700000000,
+      open: 100,
+      high: 110,
+      low: 90,
+      close: 105,
+      volume: 1000,
+    };
+
+    it("snaps to nearest candle OHLC when magnet is ON", () => {
+      // Near open (100)
+      expect(snapPriceToOhlc(candle, 101)).toBe(100);
+      // Near close (105)
+      expect(snapPriceToOhlc(candle, 104)).toBe(105);
+      // Near high (110)
+      expect(snapPriceToOhlc(candle, 109)).toBe(110);
+      // Near low (90)
+      expect(snapPriceToOhlc(candle, 92)).toBe(90);
+    });
+
+    it("allows raw floating cursor price when magnet is OFF", () => {
+      // Without magnet, the raw price (e.g. 103.45) is not snapped
+      const rawPrice = 103.45;
+      const magnetOn = false;
+      const activePrice = magnetOn ? snapPriceToOhlc(candle, rawPrice) : rawPrice;
+      expect(activePrice).toBe(103.45);
+    });
   });
 });

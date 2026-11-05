@@ -1,6 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isFuturesSymbol } from "@/lib/symbols";
 
+function baseAsset(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  for (const quote of ["USDT", "USDC", "BUSD", "USD"]) {
+    if (upper.endsWith(quote)) return upper.slice(0, -quote.length);
+  }
+  return upper;
+}
+
+async function fetchOkxTicker(symbol: string) {
+  const base = baseAsset(symbol);
+  const spotInstId = `${base}-USDT`;
+  const swapInstId = `${base}-USDT-SWAP`;
+
+  const [spotRes, markRes] = await Promise.allSettled([
+    fetch(`https://www.okx.com/api/v5/market/ticker?instId=${spotInstId}`, { cache: "no-store" }),
+    fetch(`https://www.okx.com/api/v5/public/mark-price?instType=SWAP&instId=${swapInstId}`, { cache: "no-store" }),
+  ]);
+
+  let item: any = null;
+  let markPrice: number | null = null;
+
+  if (spotRes.status === "fulfilled" && spotRes.value.ok) {
+    const json = await spotRes.value.json();
+    item = json?.data?.[0] ?? null;
+  }
+
+  if (markRes.status === "fulfilled" && markRes.value.ok) {
+    try {
+      const mJson = await markRes.value.json();
+      const mItem = mJson?.data?.[0];
+      if (mItem) {
+        const parsedMark = parseFloat(mItem.markPx);
+        if (Number.isFinite(parsedMark)) markPrice = parsedMark;
+      }
+    } catch {}
+  }
+
+  if (!item) {
+    // Fallback to OKX SWAP ticker if spot pair is unavailable
+    const swapTickerRes = await fetch(
+      `https://www.okx.com/api/v5/market/ticker?instId=${swapInstId}`,
+      { cache: "no-store" }
+    );
+    if (swapTickerRes.ok) {
+      const sJson = await swapTickerRes.json();
+      item = sJson?.data?.[0] ?? null;
+    }
+  }
+
+  if (!item) throw new Error("okx ticker failed");
+
+  const lastPrice = parseFloat(item.last);
+  const open = parseFloat(item.open24h);
+  const priceChange = Number.isFinite(lastPrice) && Number.isFinite(open) ? lastPrice - open : 0;
+  const priceChangePercent =
+    Number.isFinite(open) && open > 0 ? ((lastPrice - open) / open) * 100 : 0;
+
+  return {
+    symbol,
+    source: "okx" as const,
+    lastPrice,
+    priceChange,
+    priceChangePercent,
+    high: parseFloat(item.high24h),
+    low: parseFloat(item.low24h),
+    open: Number.isFinite(open) ? open : lastPrice,
+    volume: parseFloat(item.vol24h),
+    quoteVolume: parseFloat(item.volCcy24h),
+    trades: 0,
+    markPrice,
+  };
+}
+
 async function fetchBybitTicker(symbol: string) {
   const [spotRes, linearRes] = await Promise.allSettled([
     fetch(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbol}`, { cache: "no-store" }),
@@ -56,6 +129,15 @@ export async function GET(request: NextRequest) {
   const isFutures = isFuturesSymbol(symbol);
 
   try {
+    if (requestedSource === "okx" && !isFutures) {
+      try {
+        const okxData = await fetchOkxTicker(symbol);
+        return NextResponse.json(okxData, { headers: { "Cache-Control": "s-maxage=5" } });
+      } catch {
+        // Fallback to Binance if OKX is unreachable or pair is unlisted
+      }
+    }
+
     if (requestedSource === "bybit" && !isFutures) {
       try {
         const bybitData = await fetchBybitTicker(symbol);

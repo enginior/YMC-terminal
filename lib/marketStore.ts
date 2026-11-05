@@ -5,7 +5,7 @@ import { Candle, Trade, OrderBookEntry, LiquidationOrder } from "@/lib/types";
 
 export type { LiquidationOrder } from "@/lib/types";
 
-export type ExchangeSource = "binance" | "bybit";
+export type ExchangeSource = "binance" | "bybit" | "okx";
 
 export interface ExchangeData {
   name: string;

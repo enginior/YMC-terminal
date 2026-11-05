@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
+import { IChartApi, ISeriesApi, UTCTimestamp, CrosshairMode } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { Theme } from "@/context/ThemeContext";
 import {
@@ -425,15 +425,24 @@ export function useDrawings({
     if (containerRef.current) containerRef.current.style.cursor = "default";
   }, [symbol, isLocked, isHidden, containerRef, chartRef]);
 
-  // Toggling magnet off releases snapped crosshair
+  // Synchronize crosshair mode with magnet toggle (Normal mode moves freely without sticking to candles)
   useEffect(() => {
     lastSnapRef.current = null;
-    if (!magnetOn && chartRef.current) {
-      try {
-        chartRef.current.clearCrosshairPosition();
-      } catch {}
-    }
-  }, [magnetOn, chartRef]);
+    const chart = chartRef.current;
+    if (!chart) return;
+    try {
+      if (magnetOn) {
+        chart.applyOptions({
+          crosshair: { mode: CrosshairMode.MagnetOHLC },
+        });
+      } else {
+        chart.clearCrosshairPosition();
+        chart.applyOptions({
+          crosshair: { mode: CrosshairMode.Normal },
+        });
+      }
+    } catch {}
+  }, [magnetOn, chartRef, chartEpoch]);
 
   /* ---------------- pointer events on overlay ---------------- */
 
@@ -603,27 +612,23 @@ export function useDrawings({
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    const pt = toChartPoint(e.clientX, e.clientY);
+    if (!pt) return;
+
+    const chart = chartRef.current;
+    const series = candleSeriesRef.current;
+    if (chart && series) {
+      const source =
+        stateRef.current.chartType === "line"
+          ? (lineSeriesRef.current ?? series)
+          : series;
+      chart.setCrosshairPosition(pt.price, pt.time as UTCTimestamp, source);
+    }
+
     const anchor = anchorRef.current;
     const draft = draftRef.current;
     if (!anchor || !draft) return;
-    const pt = toChartPoint(e.clientX, e.clientY);
-    if (!pt) return;
     setDraft({ ...draft, time2: pt.time, price2: pt.price });
-
-    if (stateRef.current.magnetOn) {
-      const chart = chartRef.current;
-      const series = candleSeriesRef.current;
-      const candle = candleAt(stateRef.current.snapCandles, pt.time);
-      if (chart && series && candle) {
-        const source =
-          stateRef.current.chartType === "line"
-            ? (lineSeriesRef.current ?? series)
-            : series;
-        chart.setCrosshairPosition(pt.price, pt.time as UTCTimestamp, source);
-      } else if (chart) {
-        chart.clearCrosshairPosition();
-      }
-    }
   };
 
   const onPointerUp = (e: React.PointerEvent) => {

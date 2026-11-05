@@ -24,6 +24,21 @@ const BYBIT_INTERVAL_MAP: Record<string, string> = {
   "1M": "M",
 };
 
+const OKX_INTERVAL_MAP: Record<string, string> = {
+  "1m": "1m",
+  "5m": "5m",
+  "15m": "15m",
+  "30m": "30m",
+  "1h": "1H",
+  "2h": "2H",
+  "4h": "4H",
+  "6h": "6H",
+  "12h": "12H",
+  "1d": "1D",
+  "1w": "1W",
+  "1M": "1M",
+};
+
 /** "BTCUSDT" | "btcusdt" -> "BTC" */
 function baseAsset(symbol: string): string {
   const upper = symbol.toUpperCase();
@@ -244,6 +259,7 @@ export function useMarketFeed(
   useLiquidationsFeed();
 
   const wsRef = useRef<WebSocket | null>(null);
+  const auxWsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tradeIdRef = useRef(0);
@@ -255,7 +271,7 @@ export function useMarketFeed(
   intervalRef.current = interval;
   sourceRef.current = source;
 
-  // Bybit sends snapshot + delta orderbooks; keep level maps per connection
+  // Bybit & OKX send snapshot + delta orderbooks; keep level maps per connection
   const bybitBidsRef = useRef<Map<number, number>>(new Map());
   const bybitAsksRef = useRef<Map<number, number>>(new Map());
 
@@ -265,17 +281,26 @@ export function useMarketFeed(
     const isFutures = isFuturesSymbol(currentSym);
     // Commodities (XAU, XAG, OIL) are hosted on Binance Futures
     const activeSource: ExchangeSource = isFutures ? "binance" : sourceRef.current;
-    const venueName = activeSource === "bybit" ? "Bybit" : "Binance";
+    const venueName =
+      activeSource === "bybit" ? "Bybit" : activeSource === "okx" ? "OKX" : "Binance";
 
     bybitBidsRef.current.clear();
     bybitAsksRef.current.clear();
 
+    if (auxWsRef.current) {
+      auxWsRef.current.onclose = null;
+      auxWsRef.current.close();
+      auxWsRef.current = null;
+    }
+
     const wsUrl =
       activeSource === "bybit"
         ? "wss://stream.bybit.com/v5/public/spot"
-        : isFutures
-          ? "wss://fstream.binance.com/ws"
-          : "wss://stream.binance.com:9443/ws";
+        : activeSource === "okx"
+          ? "wss://ws.okx.com:8443/ws/v5/public"
+          : isFutures
+            ? "wss://fstream.binance.com/ws"
+            : "wss://stream.binance.com:9443/ws";
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -322,6 +347,69 @@ export function useMarketFeed(
             ws.send(JSON.stringify({ op: "ping" }));
           }
         }, 18000);
+      } else if (activeSource === "okx") {
+        const okxInstId = `${baseAsset(currentSym)}-USDT`;
+        const okxBar = OKX_INTERVAL_MAP[currentInterval] || "1H";
+        ws.send(
+          JSON.stringify({
+            op: "subscribe",
+            args: [
+              { channel: "trades", instId: okxInstId },
+              { channel: "books", instId: okxInstId },
+            ],
+          })
+        );
+
+        // OKX V5 serves candlestick streams on /ws/v5/business
+        try {
+          const klineWs = new WebSocket("wss://ws.okx.com:8443/ws/v5/business");
+          auxWsRef.current = klineWs;
+          klineWs.onopen = () => {
+            klineWs.send(
+              JSON.stringify({
+                op: "subscribe",
+                args: [{ channel: `candle${okxBar}`, instId: okxInstId }],
+              })
+            );
+          };
+          klineWs.onmessage = (kEvent) => {
+            if (kEvent.data === "pong") return;
+            try {
+              const kPayload = JSON.parse(kEvent.data);
+              const ch: string = kPayload?.arg?.channel || "";
+              if (ch.startsWith("candle") && Array.isArray(kPayload?.data)) {
+                const k = kPayload.data[0];
+                if (!Array.isArray(k)) return;
+                const candleTime = Math.floor(Number(k[0]) / 1000 / 60) * 60;
+                const closePrice = parseFloat(k[4]);
+                const candle: Candle = {
+                  time: candleTime,
+                  open: parseFloat(k[1]),
+                  high: parseFloat(k[2]),
+                  low: parseFloat(k[3]),
+                  close: closePrice,
+                  volume: parseFloat(k[5]),
+                };
+                if (marketStore.getState().candles.length > 0) {
+                  marketStore.updateLiveCandle(candle);
+                }
+                if (Number.isFinite(closePrice) && closePrice > 0) {
+                  markState(true, closePrice);
+                }
+              }
+            } catch {}
+          };
+        } catch {}
+
+        if (pingRef.current) clearInterval(pingRef.current);
+        pingRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send("ping");
+          }
+          if (auxWsRef.current && auxWsRef.current.readyState === WebSocket.OPEN) {
+            auxWsRef.current.send("ping");
+          }
+        }, 18000);
       } else {
         const lower = currentSym.toLowerCase();
         const s = lower.endsWith("usdt") ? lower : `${lower}usdt`;
@@ -337,10 +425,90 @@ export function useMarketFeed(
     };
 
     ws.onmessage = (event) => {
+      if (event.data === "pong") return;
+      if (event.data === "ping") {
+        ws.send("pong");
+        return;
+      }
+
       let payload: any;
       try {
         payload = JSON.parse(event.data);
       } catch {
+        return;
+      }
+
+      if (activeSource === "okx") {
+        if (payload?.event === "subscribe") return;
+        if (payload?.event === "error") {
+          console.warn(`[OKX] stream warning: ${payload.msg || "unknown"}`);
+          return;
+        }
+
+        const channel: string = payload?.arg?.channel || "";
+
+        // 1. OKX OrderBook (snapshot + update)
+        if (channel === "books" || channel === "books5") {
+          const bookData = Array.isArray(payload.data) ? payload.data[0] : null;
+          if (!bookData) return;
+          if (payload.action === "snapshot" || channel === "books5") {
+            bybitBidsRef.current.clear();
+            bybitAsksRef.current.clear();
+          }
+          if (Array.isArray(bookData.bids)) {
+            for (const row of bookData.bids) {
+              const p = parseFloat(row[0]);
+              const s = parseFloat(row[1]);
+              if (s === 0) bybitBidsRef.current.delete(p);
+              else if (Number.isFinite(p) && Number.isFinite(s)) bybitBidsRef.current.set(p, s);
+            }
+          }
+          if (Array.isArray(bookData.asks)) {
+            for (const row of bookData.asks) {
+              const p = parseFloat(row[0]);
+              const s = parseFloat(row[1]);
+              if (s === 0) bybitAsksRef.current.delete(p);
+              else if (Number.isFinite(p) && Number.isFinite(s)) bybitAsksRef.current.set(p, s);
+            }
+          }
+
+          let bidTotal = 0;
+          let askTotal = 0;
+          const sortedBids = Array.from(bybitBidsRef.current.entries())
+            .sort((a, b) => b[0] - a[0])
+            .slice(0, BOOK_LEVELS)
+            .map(([price, size]) => ({ price, size, total: (bidTotal += size) }));
+          const sortedAsks = Array.from(bybitAsksRef.current.entries())
+            .sort((a, b) => a[0] - b[0])
+            .slice(0, BOOK_LEVELS)
+            .map(([price, size]) => ({ price, size, total: (askTotal += size) }));
+
+          marketStore.setState({
+            orderBook: { bids: sortedBids, asks: sortedAsks },
+          });
+          return;
+        }
+
+        // 2. OKX Public Trade
+        if (channel === "trades") {
+          const t = Array.isArray(payload.data) ? payload.data[0] : null;
+          if (!t) return;
+          const price = parseFloat(t.px);
+          const size = parseFloat(t.sz);
+          if (!Number.isFinite(price) || price <= 0) return;
+          const trade = {
+            price,
+            size,
+            side: (t.side === "buy" ? "buy" : "sell") as "buy" | "sell",
+            time: new Date(Number(t.ts)).toLocaleTimeString("en-US", { hour12: false }),
+          };
+          markState(true, price);
+          const currentTrades = marketStore.getState().trades;
+          marketStore.setState({
+            trades: [{ id: tradeIdRef.current++, ...trade }, ...currentTrades].slice(0, MAX_TRADES),
+          });
+          return;
+        }
         return;
       }
 
@@ -541,6 +709,11 @@ export function useMarketFeed(
         clearInterval(pingRef.current);
         pingRef.current = null;
       }
+      if (auxWsRef.current) {
+        auxWsRef.current.onclose = null;
+        auxWsRef.current.close();
+        auxWsRef.current = null;
+      }
       if (wsRef.current !== ws) return;
       retryRef.current = setTimeout(() => {
         retryRef.current = null;
@@ -560,6 +733,11 @@ export function useMarketFeed(
       clearInterval(pingRef.current);
       pingRef.current = null;
     }
+    if (auxWsRef.current) {
+      auxWsRef.current.onclose = null;
+      auxWsRef.current.close();
+      auxWsRef.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.onclose = null;
       wsRef.current.close();
@@ -575,6 +753,11 @@ export function useMarketFeed(
       if (pingRef.current) {
         clearInterval(pingRef.current);
         pingRef.current = null;
+      }
+      if (auxWsRef.current) {
+        auxWsRef.current.onclose = null;
+        auxWsRef.current.close();
+        auxWsRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.onclose = null;

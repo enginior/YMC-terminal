@@ -19,11 +19,50 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
+    version: "v0.3.1",
+    badge: "Precision Charting & Multi-Exchange Update",
+    tagline: "TradingView-Style Free Floating Cursor, Explicit OHLC Magnet Snapping, OKX Integration & Workspace Density",
+    date: "Current",
+    isLatest: true,
+    categories: [
+      {
+        name: "TradingView-Style Free Floating Crosshair & OHLC Magnet",
+        items: [
+          "Crosshair lines (perpendicular horizontal price and vertical time axis guides) float smoothly across the chart canvas without automatically sticking or snapping to candle wicks when Magnet Mode is off.",
+          "Explicit OHLC Magnet Mode (🧲 button in chart drawing rail or toolbar) activates CrosshairMode.MagnetOHLC for pixel-perfect anchor snapping to candle Open, High, Low, or Close levels.",
+          "Pointer-leave cleanup: instantly clears synthetic crosshair position on pointer exit, eliminating stuck or displaced crosshairs.",
+        ],
+      },
+      {
+        name: "Tri-Exchange Real-Time Data Routing (OKX, Bybit & Binance)",
+        items: [
+          "Full OKX spot & swap ticker API integration (fetchOkxTicker) and historical klines backfill (fetchOkxKlines) with graceful fallback resilience.",
+          "Live WebSocket trade streams and ticker synchronization for OKX alongside Binance and Bybit in useMultiExchangeData.",
+          "Unified Feed Source selector (BINANCE | BYBIT | OKX) in the top MarketStats strip and CommandBar with 100% price synchronization across ticker, chart, and order book.",
+        ],
+      },
+      {
+        name: "Collapsible Secondary Panels & Workspace Density",
+        items: [
+          "Quick one-click collapsible panel controls for secondary trading widgets: OrderBook, TradeTape, Market Sentiment, and Alerts.",
+          "Sticky collapse header bars with instant expand/collapse indicators to maximize PriceChart and Day Trader scanner screen real estate.",
+        ],
+      },
+      {
+        name: "Build Resilience & Monorepo Dependency Fixes",
+        items: [
+          "Resolved upstream peer dependency resolution conflict with @types/node and vitest in production Vercel CI/CD via .npmrc legacy-peer-deps configuration.",
+          "Maintained 100% test coverage with expanded Vitest test suites for crosshair modes, drawing primitives, and multi-exchange routing.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.3.0",
     badge: "Major Quantitative & Architecture Release",
     tagline: "Day Trader Desk, Hybrid Time Machine, ICT AMD Strategy, Unified Exchange Source & Split-Screen Workspace",
-    date: "Current",
-    isLatest: true,
+    date: "Prior",
+    isLatest: false,
     categories: [
       {
         name: "Day Trader Desk & 6 Pine-Style Strategy Detectors",
@@ -43,9 +82,9 @@ const RELEASES: ReleaseUpdate[] = [
         ],
       },
       {
-        name: "Unified Exchange Feed Source (Binance & Bybit)",
+        name: "Unified Exchange Feed Source (Binance, Bybit & OKX)",
         items: [
-          "Replaced legacy 4-exchange price averaging with a unified, single-authority Feed Source selector (BINANCE | BYBIT) in the top MarketStats strip and command bar.",
+          "Replaced legacy 4-exchange price averaging with a unified, single-authority Feed Source selector (BINANCE | BYBIT | OKX) in the top MarketStats strip and command bar.",
           "100% price synchronization between the top MarketStats headline price, 24h ticker stats, PriceChart candlesticks, OrderBook L2 ladder, TradeTape, and Day Trader scanner.",
           "Automatic BINANCE FUT routing for commodity perpetuals (Gold XAU/USDT, Silver XAG/USDT, WTI Crude Oil OIL/USDT).",
         ],
@@ -302,7 +341,7 @@ const RELEASES: ReleaseUpdate[] = [
 ];
 
 const FEATURES = [
-  "Unified Exchange Feed Source (selectable Binance or Bybit WebSocket + REST authority)",
+  "Unified Exchange Feed Source (selectable Binance, Bybit, or OKX WebSocket + REST authority)",
   "Day Trader Desk: 6 Pine-style setup detectors (ORB, AMD Power of 3, BB Squeeze, Mean Reversion, Trend Flag, Liq Sweep) + Hybrid Time Machine",
   "Live L2 order book, time & sales tape, and 24h mark/basis spread strip",
   "Collapsible left sidebar (Watchlist, Macro Calendar, Heatmap) & 50/50 split-screen widget expansion",
@@ -419,15 +458,15 @@ const STACK = [
   "Next.js 16 · React 19 · TypeScript",
   "lightweight-charts v5 (TradingView)",
   "Tailwind CSS v4 (CSS-first theming)",
-  "Unified Binance & Bybit V5 WebSockets + REST",
+  "Unified Binance, Bybit V5 & OKX V5 WebSockets + REST",
   "Vercel serverless API routes, no API keys",
 ];
 
 const SOURCES: [string, string][] = [
-  ["Unified market feed", "Selectable Binance or Bybit V5 WebSockets (Trades, L2 Book, Klines)"],
+  ["Unified market feed", "Selectable Binance, Bybit V5, or OKX V5 WebSockets (Trades, L2 Book, Klines)"],
   ["Commodities / Perpetuals", "Binance Futures (fapi / fstream) for XAU, XAG, WTI Oil"],
-  ["Historical candles", "static-klines (GitHub Pages) + Binance / Bybit V5 REST"],
-  ["24h stats / funding / OI", "Binance & Bybit V5 REST (spot + linear perpetuals)"],
+  ["Historical candles", "static-klines (GitHub Pages) + Binance / Bybit V5 / OKX V5 REST"],
+  ["24h stats / funding / OI", "Binance, Bybit V5 & OKX V5 REST (spot + linear perpetuals)"],
   ["Sentiment", "alternative.me Fear & Greed + Binance Long/Short Ratio"],
   ["News", "CoinDesk, CoinTelegraph, The Block, Decrypt, Bitcoin Magazine, CNBC"],
 ];
@@ -453,7 +492,7 @@ export default function AboutPage() {
             className="text-xs font-mono px-2 py-0.5 rounded border"
             style={{ borderColor: theme.border, color: theme.dim }}
           >
-            v0.3.0
+            v0.3.1
           </span>
         </div>
         <span className="hidden sm:inline text-xs sm:text-sm uppercase tracking-wider" style={{ color: theme.dim }}>
@@ -477,7 +516,7 @@ export default function AboutPage() {
                 className="text-xs sm:text-[13px] uppercase tracking-wider font-bold px-2.5 py-1 rounded"
                 style={{ background: `${theme.green}25`, color: theme.green }}
               >
-                Production Release v0.3.0
+                Production Release v0.3.1
               </span>
             </div>
             <h1
@@ -571,7 +610,7 @@ export default function AboutPage() {
                 >
                   {showOlderReleases
                     ? "▲ Collapse Prior Versions"
-                    : "▼ View Prior Versions (v0.2.0, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1)"}
+                    : "▼ View Prior Versions (v0.3.0, v0.2.0, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1)"}
                 </button>
               </div>
             </div>
@@ -835,7 +874,7 @@ export default function AboutPage() {
           >
             <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs sm:text-sm">YMC Terminal v0.3.0</span>
+              <span className="font-mono text-xs sm:text-sm">YMC Terminal v0.3.1</span>
               <a
                 href={REPO_URL}
                 target="_blank"

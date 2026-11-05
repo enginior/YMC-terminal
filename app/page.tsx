@@ -31,17 +31,42 @@ const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
 
 const DEFAULT_ORDER = [
   "trader",
-  "orderbook",
-  "tradetape",
-  "alerts",
-  "sentiment",
   "sessions",
   "news",
+  "orderbook",
+  "tradetape",
+  "sentiment",
+  "alerts",
 ] as const;
 
 type PanelId = (typeof DEFAULT_ORDER)[number];
 
-const ORDER_KEY = "btc-terminal:panel-order";
+const SECONDARY_PANELS: readonly PanelId[] = [
+  "orderbook",
+  "tradetape",
+  "sentiment",
+  "alerts",
+];
+
+const PANEL_TITLES: Record<PanelId, string> = {
+  trader: "Day Trader Scanner",
+  sessions: "Market Sessions",
+  news: "News Feed",
+  orderbook: "Order Book",
+  tradetape: "Trade Tape",
+  sentiment: "Market Sentiment",
+  alerts: "Price Alerts",
+};
+
+const DEFAULT_COLLAPSED: Record<string, boolean> = {
+  orderbook: true,
+  tradetape: true,
+  sentiment: true,
+  alerts: true,
+};
+
+const ORDER_KEY = "btc-terminal:panel-order-v3";
+const COLLAPSED_PANELS_KEY = "btc-terminal:collapsed-panels";
 const LEFT_RAIL_KEY = "btc-terminal:left-rail";
 const EXCHANGE_SOURCE_KEY = "btc-terminal:exchange-source";
 
@@ -83,6 +108,10 @@ export default function Home() {
   const skipExchangeSourceSaveRef = useRef(true);
   const [ticker, setTicker] = useState<TickerStats | null>(null);
   const [panelOrder, setPanelOrder] = useState<PanelId[]>([...DEFAULT_ORDER]);
+  const [collapsedPanels, setCollapsedPanels] = useState<Record<string, boolean>>({
+    ...DEFAULT_COLLAPSED,
+  });
+  const skipCollapsedSaveRef = useRef(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   // Global Bloomberg-style keyboard navigation
@@ -186,11 +215,28 @@ export default function Home() {
         setShowLeftRail(savedLeft === "true");
       }
       const savedSource = window.localStorage.getItem(EXCHANGE_SOURCE_KEY);
-      if (savedSource === "binance" || savedSource === "bybit") {
+      if (savedSource === "binance" || savedSource === "bybit" || savedSource === "okx") {
         setExchangeSource(savedSource);
+      }
+      const savedCollapsed = window.localStorage.getItem(COLLAPSED_PANELS_KEY);
+      if (savedCollapsed) {
+        const parsed = JSON.parse(savedCollapsed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          setCollapsedPanels(parsed);
+        }
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (skipCollapsedSaveRef.current) {
+      skipCollapsedSaveRef.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(COLLAPSED_PANELS_KEY, JSON.stringify(collapsedPanels));
+    } catch {}
+  }, [collapsedPanels]);
 
   useEffect(() => {
     if (skipLeftRailSaveRef.current) {
@@ -267,18 +313,34 @@ export default function Home() {
 
   const noDragOver = (e: React.DragEvent) => e.preventDefault();
 
+  const togglePanelCollapsed = useCallback((id: PanelId) => {
+    setCollapsedPanels((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
   const renderPanel = (id: PanelId) => {
     const index = panelOrder.indexOf(id);
+    const isCollapsed = Boolean(collapsedPanels[id]);
+    const bothBookAndTapeOpen =
+      !collapsedPanels.orderbook && !collapsedPanels.tradetape;
+    const span: 1 | 2 = isCollapsed
+      ? 2
+      : (id === "orderbook" || id === "tradetape") && bothBookAndTapeOpen
+        ? 1
+        : 2;
+
     // `key` is passed explicitly by the caller — spreading it triggers a React warning
     const props = {
-      height: id === "trader" ? 310 : id === "news" ? 300 : id === "sessions" ? 200 : 200,
-      span: (id === "trader" || id === "news" || id === "sessions" ? 2 : 1) as 1 | 2,
+      title: PANEL_TITLES[id],
+      height: id === "trader" ? 310 : id === "news" ? 300 : id === "sessions" ? 210 : 210,
+      span,
       onDragStart: () => handleDragStart(index),
       onDragOver: noDragOver,
       onDrop: () => handleDrop(index),
       isDragging: dragIndex === index,
       onToggleMaximize: () => setMaximizedPanel(maximizedPanel === id ? null : id),
       isMaximized: maximizedPanel === id,
+      collapsed: isCollapsed,
+      onToggleCollapse: () => togglePanelCollapsed(id),
     };
 
     let body: React.ReactNode;
@@ -425,6 +487,11 @@ export default function Home() {
 
     if (upper === "BYBIT" || upper === "SOURCE BYBIT") {
       setExchangeSource("bybit");
+      return;
+    }
+
+    if (upper === "OKX" || upper === "SOURCE OKX") {
+      setExchangeSource("okx");
       return;
     }
 
@@ -682,20 +749,24 @@ export default function Home() {
             >
               <div
                 className="h-7 px-3 flex items-center justify-between border-b shrink-0 text-[10px]"
-                style={{ background: theme.bg, borderColor: theme.border }}
+                style={{ background: theme.bg, borderColor: `${theme.dim}55` }}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-bold tracking-wider" style={{ color: theme.yellow }}>
-                    EXPANDED RIGHT PANEL: {maximizedPanel.toUpperCase()}
+                    EXPANDED RIGHT PANEL: {PANEL_TITLES[maximizedPanel as PanelId]?.toUpperCase() || maximizedPanel.toUpperCase()}
                   </span>
                   <span style={{ color: theme.dim }}>({selectedSymbol})</span>
                 </div>
                 <button
                   onClick={() => setMaximizedPanel(null)}
-                  className="px-2 py-0.5 rounded border hover:opacity-80 font-mono text-[10px]"
-                  style={{ borderColor: theme.border, color: theme.text }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded border hover:opacity-90 font-mono font-bold text-[10px] cursor-pointer"
+                  style={{
+                    borderColor: `${theme.yellow}80`,
+                    background: `${theme.yellow}18`,
+                    color: theme.yellow,
+                  }}
                 >
-                  ✕ Restore Right Grid (Esc)
+                  ✕ RESTORE RIGHT GRID (Esc)
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
@@ -703,9 +774,93 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className={`${rightColSpan} overflow-y-auto min-h-0`} style={{ background: theme.panel }}>
-              <div className="grid grid-cols-2 gap-px" style={{ background: theme.border, gridAutoFlow: "row dense" }}>
-                {panelOrder.map(renderPanel)}
+            <div
+              className={`${rightColSpan} overflow-y-auto min-h-0 p-1.5 flex flex-col gap-2`}
+              style={{ background: theme.bg }}
+            >
+              <div className="grid grid-cols-2 gap-2" style={{ gridAutoFlow: "row dense" }}>
+                {panelOrder.slice(0, 3).map(renderPanel)}
+              </div>
+
+              {/* Secondary Toggle Widgets Header + Scrollable Cards */}
+              <div
+                className="rounded border px-2 py-1.5 flex flex-col gap-1.5 shrink-0"
+                style={{
+                  background: theme.panel,
+                  borderColor: `${theme.dim}55`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className="text-[9px] font-mono font-bold uppercase tracking-wider"
+                    style={{ color: theme.yellow }}
+                  >
+                    ▼ MORE WIDGETS (TOGGLE & SCROLL)
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCollapsedPanels((prev) => {
+                          const next = { ...prev };
+                          for (const id of SECONDARY_PANELS) next[id] = false;
+                          return next;
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold hover:opacity-90 cursor-pointer"
+                      style={{
+                        borderColor: `${theme.dim}45`,
+                        background: theme.bg,
+                        color: theme.text,
+                      }}
+                    >
+                      SHOW ALL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCollapsedPanels((prev) => {
+                          const next = { ...prev };
+                          for (const id of SECONDARY_PANELS) next[id] = true;
+                          return next;
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold hover:opacity-90 cursor-pointer"
+                      style={{
+                        borderColor: `${theme.dim}45`,
+                        background: theme.bg,
+                        color: theme.dim,
+                      }}
+                    >
+                      HIDE ALL
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {panelOrder.slice(3).map((id) => {
+                    const isOpen = !collapsedPanels[id];
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => togglePanelCollapsed(id)}
+                        className="px-2 py-0.5 rounded border text-[9px] font-mono font-bold transition-colors hover:opacity-90 cursor-pointer"
+                        style={{
+                          borderColor: isOpen ? theme.yellow : `${theme.dim}45`,
+                          background: isOpen ? `${theme.yellow}20` : theme.bg,
+                          color: isOpen ? theme.yellow : theme.dim,
+                        }}
+                      >
+                        {isOpen ? "● " : "○ "}
+                        {PANEL_TITLES[id]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2" style={{ gridAutoFlow: "row dense" }}>
+                {panelOrder.slice(3).map(renderPanel)}
               </div>
             </div>
           )}
@@ -717,11 +872,13 @@ export default function Home() {
           onClose={() => setShowSettings(false)}
           onResetLayout={() => {
             setPanelOrder([...DEFAULT_ORDER]);
+            setCollapsedPanels({ ...DEFAULT_COLLAPSED });
             setShowLeftRail(true);
             setExchangeSource("binance");
             setMaximizedPanel(null);
             try {
               window.localStorage.removeItem(ORDER_KEY);
+              window.localStorage.removeItem(COLLAPSED_PANELS_KEY);
               window.localStorage.removeItem(LEFT_RAIL_KEY);
               window.localStorage.removeItem(EXCHANGE_SOURCE_KEY);
             } catch {}

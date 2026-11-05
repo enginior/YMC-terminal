@@ -11,6 +11,7 @@ import {
   HistogramData,
   IPriceLine,
   AutoscaleInfo,
+  CrosshairMode,
 } from "lightweight-charts";
 import { Candle } from "@/lib/types";
 import { Theme } from "@/context/ThemeContext";
@@ -75,6 +76,9 @@ export function useChartInstance({
       grid: {
         vertLines: { color: theme.border },
         horzLines: { color: theme.border },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
       },
       width: container.clientWidth,
       height: container.clientHeight,
