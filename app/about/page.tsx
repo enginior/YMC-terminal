@@ -21,11 +21,44 @@ interface ReleaseUpdate {
 
 const RELEASES: ReleaseUpdate[] = [
   {
+    version: "v0.3.2",
+    badge: "Quant Math & Audio Telemetry Release",
+    tagline: "LaTeX Mathematical Specifications, Order Filled Voice Telemetry, Armed Alert Controls & Time Machine Ensembles",
+    date: "Current",
+    isLatest: true,
+    categories: [
+      {
+        name: "Audio Telemetry: 'Order Filled' Voice for Armed Setups",
+        items: [
+          "Institutional voice alert telemetry: automatically plays authentic 'Order filled' audio whenever armed Take Profit (TP) or Stop Loss (SL) levels are executed.",
+          "High-performance AudioBuffer architecture: pre-decodes audio into memory via AudioContext.decodeAudioData upon user interaction for zero-latency, background-tab continuous playback.",
+          "Armed vs. Standard Mode switch: tag individual price alerts as ⚡ ARMED or ♪ Chime directly from AlertsPanel with live audio preview testing.",
+          "Visual 'Order Filled' alert beacon: distinct green glow and contextual setup labels (e.g. ORB TP, ICT AMD SL) when price targets are achieved.",
+        ],
+      },
+      {
+        name: "KaTeX / LaTeX Institutional Mathematical Typesetting",
+        items: [
+          "Mathematical formulations across all 6 Pine-style strategy detectors (ORB, ICT AMD, Bollinger Squeeze, Mean Reversion, Trend Flag, and Liquidity Sweep).",
+          "Dedicated LaTeX display equations for dynamic Stop Loss and Take Profit risk-to-reward projections.",
+          "Detailed notation and variable breakdown legends translating quantitative calculus into plain-English trading mechanics.",
+        ],
+      },
+      {
+        name: "Hybrid Time Machine Bayesian Master Equation",
+        items: [
+          "Master composite quant formulation: P_win = 45% Backtest + 30% Analogs + 25% Monte Carlo with mathematical expectancy E[R].",
+          "Explicit formulas for historical trade backtest win rate & profit factor, 11-dimensional Euclidean vector distance for pattern analogs, and 2,500-path empirical return bootstrap resampling.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.3.1",
     badge: "Precision Charting & Multi-Exchange Update",
     tagline: "TradingView-Style Free Floating Cursor, Explicit OHLC Magnet Snapping, OKX Integration & Workspace Density",
-    date: "Current",
-    isLatest: true,
+    date: "Prior",
+    isLatest: false,
     categories: [
       {
         name: "TradingView-Style Free Floating Crosshair & OHLC Magnet",
@@ -546,7 +579,7 @@ export default function AboutPage() {
             className="text-xs font-mono px-2 py-0.5 rounded border"
             style={{ borderColor: theme.border, color: theme.dim }}
           >
-            v0.3.1
+            v0.3.2
           </span>
         </div>
         <span className="hidden sm:inline text-xs sm:text-sm uppercase tracking-wider" style={{ color: theme.dim }}>
@@ -570,7 +603,7 @@ export default function AboutPage() {
                 className="text-xs sm:text-[13px] uppercase tracking-wider font-bold px-2.5 py-1 rounded"
                 style={{ background: `${theme.green}25`, color: theme.green }}
               >
-                Production Release v0.3.1
+                Production Release v0.3.2
               </span>
             </div>
             <h1
@@ -664,7 +697,7 @@ export default function AboutPage() {
                 >
                   {showOlderReleases
                     ? "▲ Collapse Prior Versions"
-                    : "▼ View Prior Versions (v0.3.0, v0.2.0, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1)"}
+                    : "▼ View Prior Versions (v0.3.1, v0.3.0, v0.2.0, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1)"}
                 </button>
               </div>
             </div>
@@ -1105,7 +1138,7 @@ export default function AboutPage() {
           >
             <span>YMC Terminal is free software, licensed under the GNU GPLv3.</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs sm:text-sm">YMC Terminal v0.3.1</span>
+              <span className="font-mono text-xs sm:text-sm">YMC Terminal v0.3.2</span>
               <a
                 href={REPO_URL}
                 target="_blank"
