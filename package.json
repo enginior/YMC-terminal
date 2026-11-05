@@ -12,6 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@types/katex": "^0.16.8",
+    "katex": "^0.19.1",
     "lightweight-charts": "^5.2.1",
     "next": "^16.4.2",
     "react": "^19.3.0",

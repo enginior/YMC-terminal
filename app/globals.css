@@ -58,3 +58,22 @@ body {
   background: #333333;
   border-radius: 2px;
 }
+
+
+/* KaTeX LaTeX Math Typography Tweaks for Terminal Themes */
+.katex {
+  color: inherit;
+  font-size: 1.05em;
+}
+
+.katex-display {
+  margin: 0.35rem 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15rem 0;
+}
+
+.katex-display > .katex {
+  white-space: normal;
+  text-align: center;
+}

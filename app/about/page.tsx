@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTheme, type Theme } from "@/context/ThemeContext";
 import { REPO_URL } from "@/lib/links";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 
 interface ReleaseUpdate {
   version: string;
@@ -365,6 +367,9 @@ interface StrategyPlaybookItem {
   phases: [string, string, string];
   stopRule: string;
   formula: string;
+  formulaTex: string;
+  targetRuleTex: string;
+  variables: { symbol: string; meaning: string }[];
 }
 
 const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
@@ -381,6 +386,15 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "Opposite opening range boundary (clamped 0.75×–2.5× ATR)",
     formula: "Close > RangeHigh ∧ RVOL(20) ≥ 1.1 ∧ Close ≥ EMA(20)",
+    formulaTex: "\\mathcal{C}_t > \\mathcal{R}_{\\text{high}} \\;\\land\\; \\text{RVOL}_{20} \\ge 1.1 \\;\\land\\; \\mathcal{C}_t \\ge \\text{EMA}_{20}",
+    targetRuleTex: "\\text{SL} = \\mathcal{R}_{\\text{low}} \\in [0.75, 2.5] \\cdot \\text{ATR}_{14}, \\quad \\text{TP} = \\text{Entry} + k \\cdot (\\text{Entry} - \\text{SL})",
+    variables: [
+      { symbol: "\\mathcal{C}_t", meaning: "Current bar closing price" },
+      { symbol: "\\mathcal{R}_{\\text{high}}", meaning: "Upper boundary of 6-bar opening range consolidation (Asia / London / NY killzones)" },
+      { symbol: "\\text{RVOL}_{20}", meaning: "Relative volume ratio: V_t / \\overline{V}_{20} \\ge 1.1\\times average volume" },
+      { symbol: "\\text{EMA}_{20}", meaning: "20-period Exponential Moving Average dynamic trend filter" },
+      { symbol: "k", meaning: "Configurable Risk-to-Reward multiple (1.5R / 2.0R / 3.0R)" },
+    ],
   },
   {
     id: "amd",
@@ -395,6 +409,14 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "Judas Swing manipulation wick extreme + 0.2× ATR buffer",
     formula: "ManipLow < AccLow ∧ Close > AccLow ∧ |Close - Open| ≥ 0.22×ATR",
+    formulaTex: "\\mathcal{L}_{\\text{manip}} < \\mathcal{L}_{\\text{acc}} - 0.08 \\cdot \\text{ATR} \\;\\land\\; \\mathcal{C}_t > \\mathcal{L}_{\\text{acc}} \\;\\land\\; |\\mathcal{C}_t - \\mathcal{O}_t| \\ge 0.22 \\cdot \\text{ATR}",
+    targetRuleTex: "\\text{SL} = \\mathcal{L}_{\\text{manip}} - 0.20 \\cdot \\text{ATR}_{14}, \\quad \\text{TP} = \\text{Entry} + k \\cdot (\\text{Entry} - \\text{SL})",
+    variables: [
+      { symbol: "\\mathcal{L}_{\\text{acc}}", meaning: "Lower boundary of tight 7-bar accumulation box prior to session expansion" },
+      { symbol: "\\mathcal{L}_{\\text{manip}}", meaning: "Judas Swing manipulation wick sweeping \\ge 0.08\\times ATR below accumulation" },
+      { symbol: "|\\mathcal{C}_t - \\mathcal{O}_t|", meaning: "Aggressive displacement body (\\ge 0.22\\times ATR) reclaiming the range" },
+      { symbol: "\\text{SL}", meaning: "Manipulation wick extreme with 0.20\\times ATR protective safety buffer" },
+    ],
   },
   {
     id: "squeeze",
@@ -409,6 +431,14 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "20-period Bollinger Basis (Middle SMA) or 1.4× ATR(14)",
     formula: "BBWidth ∈ P₂₅ ∧ Close > BBUpper ∧ MACDHist > MACDHist₋₁",
+    formulaTex: "\\text{BBW}_t \\le \\mathcal{P}_{25}\\left(\\{\\text{BBW}_\\tau\\}_{t-50}^t\\right) \\;\\land\\; \\mathcal{C}_t > \\text{BB}_{\\text{upper}} \\;\\land\\; \\Delta\\text{MACD}_{\\text{hist}} > 0",
+    targetRuleTex: "\\text{SL} = \\text{SMA}_{20} \\;\\lor\\; (\\text{Entry} - 1.4 \\cdot \\text{ATR}_{14}), \\quad \\text{BBW} = \\frac{\\text{BB}_{\\text{upper}} - \\text{BB}_{\\text{lower}}}{\\text{SMA}_{20}}",
+    variables: [
+      { symbol: "\\text{BBW}_t", meaning: "Bollinger Bandwidth: (Upper - Lower) / Middle SMA_{20}" },
+      { symbol: "\\mathcal{P}_{25}", meaning: "25th percentile compression over 50-bar lookback (volatility coiling)" },
+      { symbol: "\\text{BB}_{\\text{upper}}", meaning: "2\\sigma upper Bollinger envelope piercing: \\text{SMA}_{20} + 2\\cdot\\sigma" },
+      { symbol: "\\Delta\\text{MACD}_{\\text{hist}}", meaning: "Expanding MACD histogram momentum: \\text{Hist}_t - \\text{Hist}_{t-1} > 0" },
+    ],
   },
   {
     id: "mean_rev",
@@ -423,6 +453,14 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "2-bar extreme wick high/low + 0.2× ATR buffer",
     formula: "Low ≤ BBLower ∧ (RSI ≤ 36 ∨ StochK ≤ 22) ∧ Wick/Range ≥ 0.35",
+    formulaTex: "\\mathcal{L}_t \\le \\text{BB}_{\\text{lower}} \\;\\land\\; (\\text{RSI}_{14} \\le 36 \\;\\lor\\; \\%K_{\\text{Stoch}} \\le 22) \\;\\land\\; \\frac{\\text{Wick}_{\\text{lower}}}{\\mathcal{H}_t - \\mathcal{L}_t} \\ge 0.35",
+    targetRuleTex: "\\text{SL} = \\min(\\mathcal{L}_t, \\mathcal{L}_{t-1}) - 0.20 \\cdot \\text{ATR}_{14}, \\quad \\text{TP} = \\text{Entry} + k \\cdot (\\text{Entry} - \\text{SL})",
+    variables: [
+      { symbol: "\\mathcal{L}_t \\le \\text{BB}_{\\text{lower}}", meaning: "Intrabar low pierces outer 2\\sigma statistical boundary" },
+      { symbol: "\\text{RSI}_{14} / \\%K", meaning: "Dual-oscillator exhaustion confluence (RSI \\le 36 or Stoch K \\le 22)" },
+      { symbol: "\\frac{\\text{Wick}}{\\text{Range}} \\ge 0.35", meaning: "\\ge 35% rejection wick showing buyer absorption and reversal pressure" },
+      { symbol: "\\text{SL}", meaning: "2-bar extreme wick low buffered by 0.20\\times ATR" },
+    ],
   },
   {
     id: "flag",
@@ -437,6 +475,14 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "Pullback swing low/high below EMA(20)",
     formula: "EMA₂₀ > EMA₅₀ ∧ Low₋₁ ≤ EMA₂₀ ∧ Close > High₋₁",
+    formulaTex: "\\text{EMA}_{20} > \\text{EMA}_{50} \\;\\land\\; \\mathcal{L}_{t-1} \\le \\text{EMA}_{20} \\;\\land\\; \\mathcal{C}_t > \\mathcal{H}_{t-1}",
+    targetRuleTex: "\\text{SL} = \\min_{1 \\le i \\le 3}(\\mathcal{L}_{t-i}), \\quad \\text{TP} = \\text{Entry} + k \\cdot (\\text{Entry} - \\text{SL})",
+    variables: [
+      { symbol: "\\text{EMA}_{20} > \\text{EMA}_{50}", meaning: "Stacked exponential moving averages confirming bullish regime" },
+      { symbol: "\\mathcal{L}_{t-1} \\le \\text{EMA}_{20}", meaning: "Controlled 1-3 bar pullback touching the dynamic support zone" },
+      { symbol: "\\mathcal{C}_t > \\mathcal{H}_{t-1}", meaning: "Resumption candle closes above previous high to resume trend" },
+      { symbol: "\\text{SL}", meaning: "Lowest swing low of the 1-3 bar pullback below EMA_{20}" },
+    ],
   },
   {
     id: "sweep",
@@ -451,6 +497,14 @@ const STRATEGY_PLAYBOOK: StrategyPlaybookItem[] = [
     ],
     stopRule: "Sweeping candle wick extreme + 0.2× ATR buffer",
     formula: "Low < SwingLow₁₅ ∧ Close > SwingLow₁₅ ∧ Close ≥ Open",
+    formulaTex: "\\mathcal{L}_t < \\mathcal{S}_{\\text{low}}^{(15)} \\;\\land\\; \\mathcal{C}_t > \\mathcal{S}_{\\text{low}}^{(15)} \\;\\land\\; \\mathcal{C}_t \\ge \\mathcal{O}_t",
+    targetRuleTex: "\\text{SL} = \\mathcal{L}_t - 0.20 \\cdot \\text{ATR}_{14}, \\quad \\mathcal{S}_{\\text{low}}^{(15)} = \\min_{1 \\le i \\le 15}(\\mathcal{L}_{t-i})",
+    variables: [
+      { symbol: "\\mathcal{S}_{\\text{low}}^{(15)}", meaning: "15-bar structural swing low resting liquidity pool" },
+      { symbol: "\\mathcal{L}_t < \\mathcal{S}_{\\text{low}}^{(15)}", meaning: "Intrabar stop-hunt raid clearing resting sell-stops" },
+      { symbol: "\\mathcal{C}_t > \\mathcal{S}_{\\text{low}}^{(15)}", meaning: "Failed auction reclaim with bullish directional candle body" },
+      { symbol: "\\text{SL}", meaning: "Sweeping candle low extreme buffered by 0.20\\times ATR" },
+    ],
   },
 ];
 
@@ -686,23 +740,92 @@ export default function AboutPage() {
 
                     {/* Footer Telemetry: Stop Rule, Regime & Quant Formula */}
                     <div
-                      className="pt-3 border-t flex flex-col gap-1.5 text-xs sm:text-[13px] font-mono"
+                      className="pt-3 border-t flex flex-col gap-2 font-mono"
                       style={{ borderColor: theme.border }}
                     >
-                      <div>
-                        <span style={{ color: theme.red }}>STOP RULE: </span>
-                        <span style={{ color: theme.dim }}>{strat.stopRule}</span>
+                      <div className="flex flex-col gap-1 text-xs">
+                        <div>
+                          <span style={{ color: theme.red }}>STOP RULE: </span>
+                          <span style={{ color: theme.dim }}>{strat.stopRule}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: theme.blue }}>BEST REGIME: </span>
+                          <span style={{ color: theme.dim }}>{strat.regime}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span style={{ color: theme.blue }}>BEST REGIME: </span>
-                        <span style={{ color: theme.dim }}>{strat.regime}</span>
-                      </div>
+
+                      {/* LaTeX Formulation & Notation Guide Box */}
                       <div
-                        className="px-2.5 py-1.5 rounded mt-1 overflow-x-auto whitespace-nowrap"
-                        style={{ background: theme.panel, color: theme.green }}
-                        title={strat.formula}
+                        className="rounded border p-2.5 sm:p-3 flex flex-col gap-2 mt-1"
+                        style={{ background: theme.panel, borderColor: theme.border }}
                       >
-                        {strat.formula}
+                        <div className="flex items-center justify-between">
+                          <div
+                            className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider"
+                            style={{ color: theme.yellow }}
+                          >
+                            <span>ƒx</span>
+                            <span>QUANT TRIGGER SPECIFICATION</span>
+                          </div>
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded border"
+                            style={{ borderColor: `${theme.border}80`, color: theme.dim }}
+                          >
+                            LaTeX / KaTeX
+                          </span>
+                        </div>
+
+                        {/* Display Equation */}
+                        <div
+                          className="py-1.5 px-2 rounded overflow-x-auto text-center border"
+                          style={{ background: theme.bg, borderColor: `${theme.border}60` }}
+                        >
+                          <LaTeXMath math={strat.formulaTex} block />
+                        </div>
+
+                        {/* Target & Stop Projection Equation */}
+                        <div
+                          className="pt-1.5 border-t flex flex-col gap-1 text-[11px]"
+                          style={{ borderColor: `${theme.border}50` }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span style={{ color: theme.dim }}>Projection &amp; Stop Formulation:</span>
+                          </div>
+                          <div
+                            className="overflow-x-auto text-center py-1 px-2 rounded"
+                            style={{ background: theme.bg }}
+                          >
+                            <LaTeXMath math={strat.targetRuleTex} block />
+                          </div>
+                        </div>
+
+                        {/* Variable Breakdown */}
+                        <div
+                          className="pt-1.5 border-t flex flex-col gap-1.5"
+                          style={{ borderColor: `${theme.border}50` }}
+                        >
+                          <div
+                            className="text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: theme.blue }}
+                          >
+                            Formula Variable &amp; Notation Breakdown:
+                          </div>
+                          <div className="grid grid-cols-1 gap-1 text-xs">
+                            {strat.variables.map((v, idx) => (
+                              <div key={idx} className="flex items-baseline gap-2 leading-snug">
+                                <span
+                                  className="shrink-0 text-xs font-semibold"
+                                  style={{ color: theme.yellow }}
+                                >
+                                  <LaTeXMath math={v.symbol} />
+                                </span>
+                                <span className="text-[11px] font-sans" style={{ color: theme.dim }}>
+                                  {v.meaning}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -733,73 +856,181 @@ export default function AboutPage() {
                     className="font-mono text-xs sm:text-sm font-bold"
                     style={{ color: theme.yellow }}
                   >
-                    Odds = 45% Backtest + 30% Pattern Analogs + 25% Monte Carlo
+                    45% Backtest · 30% Analogs · 25% Monte Carlo
                   </span>
                 </div>
 
+                {/* Master Composite Formulation Card */}
+                <div
+                  className="rounded border p-3.5 sm:p-4 flex flex-col gap-2.5 font-mono"
+                  style={{ background: theme.panel, borderColor: theme.border }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-xs font-bold px-2 py-0.5 rounded"
+                        style={{ background: `${theme.yellow}20`, color: theme.yellow }}
+                      >
+                        MASTER COMPOSITE FORMULATION
+                      </span>
+                      <span
+                        className="text-xs sm:text-sm font-semibold uppercase tracking-wider font-sans"
+                        style={{ color: theme.text }}
+                      >
+                        Combined Statistical Win Probability &amp; Expectancy
+                      </span>
+                    </div>
+                    <span className="text-xs" style={{ color: theme.dim }}>
+                      Tri-Pillar Ensemble
+                    </span>
+                  </div>
+
+                  <div
+                    className="py-2.5 px-3 rounded overflow-x-auto text-center border"
+                    style={{ background: theme.bg, borderColor: `${theme.border}80` }}
+                  >
+                    <LaTeXMath
+                      math="P_{\text{win}}(\text{Setup}) \;=\; 0.45 \cdot \mathcal{W}_{\text{Backtest}} \;+\; 0.30 \cdot \mathcal{W}_{\text{Analogs}} \;+\; 0.25 \cdot \mathcal{W}_{\text{MonteCarlo}}"
+                      block
+                    />
+                    <div
+                      className="mt-1.5 pt-1.5 border-t border-dashed"
+                      style={{ borderColor: `${theme.border}50` }}
+                    >
+                      <LaTeXMath
+                        math="\mathbb{E}[R] \;=\; \left(P_{\text{win}} \cdot k\right) - \left((1 - P_{\text{win}}) \cdot 1.0\right), \quad k \in \{1.5\text{R}, 2.0\text{R}, 3.0\text{R}\}"
+                        block
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px] font-sans">
+                    <div className="flex items-center gap-1.5" style={{ color: theme.dim }}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: theme.yellow }} />
+                      <span><strong className="font-mono" style={{ color: theme.yellow }}>0.45</strong> Empirical Strategy Backtest Weight</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" style={{ color: theme.dim }}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: theme.blue }} />
+                      <span><strong className="font-mono" style={{ color: theme.blue }}>0.30</strong> 10-Bar Vector Euclidean Similarity</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" style={{ color: theme.dim }}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: theme.green }} />
+                      <span><strong className="font-mono" style={{ color: theme.green }}>0.25</strong> Monte Carlo 2,500 Bootstrap Paths</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3 Pillar Cards with LaTeX Math & Explanations */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Pillar 1 */}
                   <div
-                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-1.5"
+                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-2.5 justify-between font-mono"
                     style={{ background: theme.panel, borderColor: theme.border }}
                   >
-                    <div className="flex items-center justify-between font-mono text-xs sm:text-sm">
-                      <span className="font-bold" style={{ color: theme.yellow }}>
-                        1. STRATEGY BACKTEST
-                      </span>
-                      <span style={{ color: theme.dim }}>WEIGHT: 45%</span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="font-bold" style={{ color: theme.yellow }}>
+                          1. STRATEGY BACKTEST
+                        </span>
+                        <span style={{ color: theme.dim }}>WEIGHT: 45%</span>
+                      </div>
+                      <p className="text-xs sm:text-sm leading-relaxed font-sans" style={{ color: theme.dim }}>
+                        Replays strategy entry, stop, and take-profit rules bar-by-bar across historical candles over your selected horizon (<span className="font-mono">12b / 24b / 48b</span>) to evaluate whether Target or Stop was touched first.
+                      </p>
                     </div>
-                    <p
-                      className="text-xs sm:text-sm leading-relaxed"
-                      style={{ color: theme.dim }}
-                    >
-                      Replays the selected strategy rules across all loaded historical candles,
-                      checking bar-by-bar over your <span className="font-mono">12b / 24b / 48b</span>{" "}
-                      horizon whether <span style={{ color: theme.green }}>Target (+R)</span> or{" "}
-                      <span style={{ color: theme.red }}>Stop (-1R)</span> was touched first to build
-                      the cumulative-<span className="font-mono">R</span> equity curve and Profit Factor.
-                    </p>
+
+                    <div className="flex flex-col gap-1.5 pt-2 border-t" style={{ borderColor: `${theme.border}60` }}>
+                      <div className="text-[10px] font-semibold" style={{ color: theme.yellow }}>
+                        EMPIRICAL WIN RATE &amp; PROFIT FACTOR:
+                      </div>
+                      <div className="py-1 px-2 rounded overflow-x-auto text-center border" style={{ background: theme.bg, borderColor: `${theme.border}50` }}>
+                        <LaTeXMath
+                          math="\mathcal{W}_{\text{Backtest}} = \frac{N_{\text{TP}}}{N_{\text{TP}} + N_{\text{SL}}}, \quad \text{PF} = \frac{\sum R_{\text{gains}}}{\sum R_{\text{losses}}}"
+                          block
+                        />
+                      </div>
+                      <div className="text-[10.5px] leading-tight font-sans" style={{ color: theme.dim }}>
+                        Calculates cumulative-<LaTeXMath math="R" /> equity curve trajectory and expectancy.
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Pillar 2 */}
                   <div
-                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-1.5"
+                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-2.5 justify-between font-mono"
                     style={{ background: theme.panel, borderColor: theme.border }}
                   >
-                    <div className="flex items-center justify-between font-mono text-xs sm:text-sm">
-                      <span className="font-bold" style={{ color: theme.blue }}>
-                        2. 10-BAR PATTERN ANALOGS
-                      </span>
-                      <span style={{ color: theme.dim }}>WEIGHT: 30%</span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="font-bold" style={{ color: theme.blue }}>
+                          2. 10-BAR PATTERN ANALOGS
+                        </span>
+                        <span style={{ color: theme.dim }}>WEIGHT: 30%</span>
+                      </div>
+                      <p className="text-xs sm:text-sm leading-relaxed font-sans" style={{ color: theme.dim }}>
+                        Normalizes the latest 10-candle price structure and RSI(14) into an 11-dimensional feature vector, scanning history via Euclidean distance to find the top 25 closest historical twins.
+                      </p>
                     </div>
-                    <p
-                      className="text-xs sm:text-sm leading-relaxed"
-                      style={{ color: theme.dim }}
-                    >
-                      Normalizes the latest 10-candle price structure and RSI(14) level into a
-                      feature vector, scanning history via Euclidean distance to find the top 25
-                      closest historical twins and their forward win rate.
-                    </p>
+
+                    <div className="flex flex-col gap-1.5 pt-2 border-t" style={{ borderColor: `${theme.border}60` }}>
+                      <div className="text-[10px] font-semibold" style={{ color: theme.blue }}>
+                        EUCLIDEAN DISTANCE &amp; ANALOG WIN RATE:
+                      </div>
+                      <div className="py-1 px-2 rounded overflow-x-auto text-center border" style={{ background: theme.bg, borderColor: `${theme.border}50` }}>
+                        <LaTeXMath
+                          math="D(\mathbf{x}, \mathbf{y}) = \sqrt{\sum_{i=1}^{10} (\tilde{c}_i - \tilde{c}'_i)^2 + \omega \left(\frac{\Delta\text{RSI}_i}{100}\right)^2}"
+                          block
+                        />
+                        <div className="pt-1 mt-0.5 border-t border-dashed" style={{ borderColor: `${theme.border}40` }}>
+                          <LaTeXMath
+                            math="\mathcal{W}_{\text{Analogs}} = \frac{1}{25}\sum_{j \in \mathcal{K}_{25}} \mathbf{1}_{\{\text{Target reached}\}}"
+                            block
+                          />
+                        </div>
+                      </div>
+                      <div className="text-[10.5px] leading-tight font-sans" style={{ color: theme.dim }}>
+                        <LaTeXMath math="\mathcal{K}_{25}" />: top 25 historical structural twins minimizing Euclidean distance.
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Pillar 3 */}
                   <div
-                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-1.5"
+                    className="p-3.5 sm:p-4 rounded border flex flex-col gap-2.5 justify-between font-mono"
                     style={{ background: theme.panel, borderColor: theme.border }}
                   >
-                    <div className="flex items-center justify-between font-mono text-xs sm:text-sm">
-                      <span className="font-bold" style={{ color: theme.green }}>
-                        3. MONTE CARLO (2,500 PATHS)
-                      </span>
-                      <span style={{ color: theme.dim }}>WEIGHT: 25%</span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="font-bold" style={{ color: theme.green }}>
+                          3. MONTE CARLO (2,500 PATHS)
+                        </span>
+                        <span style={{ color: theme.dim }}>WEIGHT: 25%</span>
+                      </div>
+                      <p className="text-xs sm:text-sm leading-relaxed font-sans" style={{ color: theme.dim }}>
+                        Resamples empirical returns and intrabar high/low wicks from the recent 120-bar volatility regime across 2,500 seeded forward paths to compute TP Hit %, SL Hit %, and P10/P50/P90 cones.
+                      </p>
                     </div>
-                    <p
-                      className="text-xs sm:text-sm leading-relaxed"
-                      style={{ color: theme.dim }}
-                    >
-                      Resamples empirical returns and intrabar high/low wicks from the recent
-                      120-bar volatility regime across 2,500 seeded forward paths to compute{" "}
-                      <span className="font-mono">TP Hit %</span>,{" "}
-                      <span className="font-mono">SL Hit %</span>, and the{" "}
-                      <span className="font-mono">P10 / P50 / P90</span> price cone.
-                    </p>
+
+                    <div className="flex flex-col gap-1.5 pt-2 border-t" style={{ borderColor: `${theme.border}60` }}>
+                      <div className="text-[10px] font-semibold" style={{ color: theme.green }}>
+                        BOOTSTRAP RESAMPLING &amp; HIT PROBABILITY:
+                      </div>
+                      <div className="py-1 px-2 rounded overflow-x-auto text-center border" style={{ background: theme.bg, borderColor: `${theme.border}50` }}>
+                        <LaTeXMath
+                          math="S_{t+h}^{(m)} = S_t \cdot \prod_{k=1}^h (1 + r_{\tau_k}^{(m)}), \quad r_\tau \sim \operatorname{Bootstrap}\left(\{r\}_{t-120}^t\right)"
+                          block
+                        />
+                        <div className="pt-1 mt-0.5 border-t border-dashed" style={{ borderColor: `${theme.border}40` }}>
+                          <LaTeXMath
+                            math="\mathcal{W}_{\text{MonteCarlo}} = \frac{1}{M}\sum_{m=1}^{M=2500} \mathbf{1}_{\{\text{TP Hit before SL}\}}"
+                            block
+                          />
+                        </div>
+                      </div>
+                      <div className="text-[10.5px] leading-tight font-sans" style={{ color: theme.dim }}>
+                        Simulates 2,500 paths to map empirical volatility cones (P10 / P50 / P90).
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -916,6 +1147,36 @@ function Card({
       </h2>
       {children}
     </section>
+  );
+}
+
+function LaTeXMath({
+  math,
+  block = false,
+  className = "",
+  style = {},
+}: {
+  math: string;
+  block?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  let html = "";
+  try {
+    html = katex.renderToString(math, {
+      displayMode: block,
+      throwOnError: false,
+    });
+  } catch {
+    html = `<code class="font-mono text-xs">${math}</code>`;
+  }
+
+  return (
+    <span
+      className={`katex-wrapper ${block ? "block overflow-x-auto text-center" : "inline"} ${className}`}
+      style={{ color: "inherit", ...style }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
 
